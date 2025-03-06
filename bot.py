@@ -324,57 +324,6 @@ async def history(ctx, limit: int = 11):
         await ctx.send(f"Error fetching history: {str(e)}")
 
 
-@bot.command(aliases=["stats"])
-async def queue_stats(ctx):
-    try:
-        queue_data = db.get_queue_statistics()
-
-        if not queue_data:
-            await ctx.send("No queue data available.")
-            return
-
-        df = pd.DataFrame(queue_data, columns=["timestamp", "queue_count"])
-
-        df["timestamp"] = pd.to_datetime(df["timestamp"], format="%Y-%m-%d %H:%M:%S", errors="coerce")
-        df["date"] = df["timestamp"].dt.floor("D")
-        df["date"] = df["timestamp"].dt.normalize()
-
-        df_daily = df.groupby("date", as_index=False)["queue_count"].sum()
-
-        df_daily["queue_count"] = df_daily["queue_count"].round().astype(int)
-
-        sns.set(style="darkgrid", context="talk")
-        plt.style.use("dark_background")
-        plt.rcParams.update({"grid.linewidth": 0.5, "grid.alpha": 0.5})
-        plt.figure(figsize=(10, 5))
-
-        ax = sns.barplot(x=df_daily["date"], y=df_daily["queue_count"], color="royalblue")
-
-        ax.set_title("Daily Queue Load", fontsize=14)
-        ax.set_xlabel("Date")
-        ax.set_ylabel("Total Players in Queue")
-
-        ax.yaxis.set_major_locator(MaxNLocator(integer=True))
-
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-
-        ax.xaxis.set_major_locator(mdates.DayLocator())
-        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y-%m-%d"))
-
-        plt.xticks(rotation=45)
-        plt.tight_layout()
-
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png')
-        buf.seek(0)
-
-        await ctx.send(file=discord.File(buf, "queue_stats_bar.png"))
-    except Exception as e:
-        await ctx.send(f"Error generating queue statistics: {str(e)}")
-
-
 @bot.command(aliases=["elo"])
 async def elo_graph_cmd(ctx, mode: str = None):
     try:
