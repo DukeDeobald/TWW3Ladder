@@ -23,7 +23,7 @@ class Database:
                 name TEXT NOT NULL
             );
 
-                        CREATE TABLE IF NOT EXISTS player_ratings (
+            CREATE TABLE IF NOT EXISTS player_ratings (
                 player_id INTEGER, 
                 GameModeID INTEGER, 
                 elo INT DEFAULT 1000,   
@@ -50,7 +50,7 @@ class Database:
             );
 
             CREATE TABLE IF NOT EXISTS matches (
-                id INTEGER PRIMARY KEY, 
+                id INTEGER PRIMARY KEY AUTOINCREMENT, 
                 player1 INTEGER, 
                 player2 INTEGER, 
                 GameModeID INTEGER, 
@@ -74,13 +74,10 @@ class Database:
                 FOREIGN KEY (GameModeID) REFERENCES gamemode(id)
             );
             
-            INSERT OR IGNORE INTO players (id, discord_id)
-            VALUES (1, 577546429988470795);
-            
             INSERT OR IGNORE INTO gamemode (id, name) VALUES (1, 'land');
             INSERT OR IGNORE INTO gamemode (id, name) VALUES (2, 'conquest');
             INSERT OR IGNORE INTO gamemode (id, name) VALUES (3, 'domination');
-            INSERT OR IGNORE INTO gamemode (id, name) VALUES (4, 'lucky-test');
+            INSERT OR IGNORE INTO gamemode (id, name) VALUES (4, 'luckytest');
             
             CREATE TABLE IF NOT EXISTS bets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -319,7 +316,7 @@ class Database:
             WHERE player_id = (SELECT id FROM players WHERE discord_id = ?) AND GameModeID = ?
         """, (discord_id, GameModeID))
         result = self.cursor.fetchone()
-        return result[0] if result else 1000  # Default ELO if not found
+        return result[0] if result else "N/A"
 
     def update_player_rating(self, player_id, GameModeID, rating):
         self.cursor.execute("""
@@ -411,6 +408,7 @@ class Database:
         return result[0] if result else None
 
     def get_player_balance(self, user_id):
+        print(user_id)
         self.cursor.execute("SELECT tokens FROM players WHERE id = ?", (user_id,))
         result = self.cursor.fetchone()
 
@@ -431,7 +429,6 @@ class Database:
     def place_bet(self, bettor_id, match_id, bet_side, amount):
         now = datetime.now().isoformat()
         player_id = self.get_player_id(bettor_id)
-
 
         balance = self.get_player_balance(player_id)
         if balance < amount:
@@ -454,42 +451,40 @@ class Database:
         for bettor_id, bet_side, amount in bets:
             if bet_side == winner_id:
                 winnings = amount * 2
-                new_balance = self.get_player_balance(bettor_id) + winnings
-                self.update_player_balance(bettor_id, new_balance)
-
-        for bettor_id, bet_side, amount in bets:
-            if bet_side == winner_id:
-                winnings = amount * 2
-                new_balance = self.get_player_balance(bettor_id) + winnings
-                self.update_player_balance(bettor_id, new_balance)
+                try:
+                    new_balance = self.get_player_balance(self.get_player_id(bettor_id)) + winnings
+                    self.update_player_balance(self.get_player_id(bettor_id), new_balance)
+                except ValueError as e:
+                    print(f"Error resolving bet for bettor {bettor_id}: {str(e)}")
 
         self.cursor.execute("UPDATE bets SET resolved = TRUE WHERE match_id = ?", (match_id,))
         self.conn.commit()
 
-        self.cursor.execute("UPDATE bets SET resolved = TRUE WHERE match_id = ?", (match_id,))
-        self.conn.commit()
-
-
-
-    def check_win_reward(self, user_id):
+    def check_win_reward(self, discord_id):
+        user_id = self.get_player_id(discord_id)
         self.cursor.execute("SELECT COUNT(*) FROM match_history WHERE winner = ?", (user_id,))
         wins = self.cursor.fetchone()[0]
-        if wins >= 10:
-            return "Champion", 123456789
 
-        self.cursor.execute("SELECT COUNT(*) FROM bets WHERE bettor_id = ?", (user_id,))
-        bets = self.cursor.fetchone()[0]
-        if bets >= 20:
-            return "Elite Gambler", 987654321
-
-        self.cursor.execute("SELECT winner FROM match_history WHERE winner = ? ORDER BY datetime DESC LIMIT 5",
-                            (user_id,))
-        recent_wins = self.cursor.fetchall()
-        if len(recent_wins) == 5 and all(win[0] == user_id for win in recent_wins):
-            return "High Roller", 567891234
-
-        if wins == 1:
-            return "Lucky Beginner", 1342193789191847976
+        if wins >= 100:
+            return "Grand Knight", 123456789012345678  # Replace with actual Grand Knight role ID
+        elif wins >= 90:
+            return "Knight Commander", 123456789012345679  # Replace with actual Knight Commander role ID
+        elif wins >= 80:
+            return "Knight", 123456789012345680  # Replace with actual Knight role ID
+        elif wins >= 70:
+            return "Baron", 123456789012345681  # Replace with actual Baron role ID
+        elif wins >= 60:
+            return "Lord", 123456789012345682  # Replace with actual Lord role ID
+        elif wins >= 50:
+            return "Duke", 123456789012345683  # Replace with actual Duke role ID
+        elif wins >= 40:
+            return "Count", 123456789012345684  # Replace with actual Count role ID
+        elif wins >= 30:
+            return "Squire", 123456789012345685  # Replace with actual Squire role ID
+        elif wins >= 20:
+            return "Knight Apprentice", 123456789012345686  # Replace with actual Knight Apprentice role ID
+        elif wins >= 10:
+            return "Peasant", 123456789012345687  # Replace with actual Peasant role ID
 
         return None, None
 
@@ -542,3 +537,61 @@ class Database:
         """, (player1, player2, GameModeID))
         result = self.cursor.fetchone()
         return result[0] if result else None
+
+    def get_winrate(self, discord_id, GameModeID):
+        player_id = self.get_player_id(discord_id)
+        self.cursor.execute(
+            "SELECT wins, matches FROM player_ratings WHERE player_id = ? AND GameModeID = ?",
+            (player_id, GameModeID),
+        )
+        result = self.cursor.fetchone()
+
+        if result:
+            wins, matches = result
+            wins = wins if wins is not None else 0
+            matches = matches if matches is not None else 0
+
+            return round((wins / matches) * 100, 1) if matches > 0 else 0
+        return 0
+
+    def get_player_rank(self, discord_id, GameModeID):
+        player_id = self.get_player_id(discord_id)
+        self.cursor.execute(
+            "SELECT elo FROM player_ratings WHERE player_id = ? AND GameModeID = ?",
+            (player_id, GameModeID),
+        )
+        result = self.cursor.fetchone()
+        if not result:
+            return None, None
+
+        player_elo = result[0]
+
+        self.cursor.execute(
+            "SELECT COUNT(*) FROM player_ratings WHERE GameModeID = ? AND elo > ?",
+            (GameModeID, player_elo),
+        )
+        higher_rank_count = self.cursor.fetchone()[0]
+
+        self.cursor.execute(
+            "SELECT COUNT(*) FROM player_ratings WHERE GameModeID = ?",
+            (GameModeID,),
+        )
+        total_players = self.cursor.fetchone()[0]
+
+        player_rank = higher_rank_count + 1
+        return player_rank, total_players
+
+    def get_opponent_id(self, bettor_id: int, match_id: int):
+        self.cursor.execute("SELECT player1, player2 FROM matches WHERE id = ?", (match_id,))
+        match = self.cursor.fetchone()
+
+        if match is None:
+            return None
+        player1_id, player2_id = match
+
+        if bettor_id == player1_id:
+            return player2_id
+        elif bettor_id == player2_id:
+            return player1_id
+        else:
+            return None

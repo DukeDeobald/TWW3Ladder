@@ -32,10 +32,10 @@ MODE_MAP = {
     "c": 2,
     "domination": 3,
     "d": 3,
-    "lucky-test": 4,
+    "luckytest": 4,
     "lt": 4
 }
-REVERSE_MODE_MAP = {1: "land", 2: "conquest", 3: "domination", 4: "lucky-test"}
+REVERSE_MODE_MAP = {1: "land", 2: "conquest", 3: "domination", 4: "luckytest"}
 
 
 @tasks.loop(hours=24)
@@ -74,17 +74,16 @@ async def status(ctx):
 
 
 @bot.command(aliases=["q"])
-async def queue(ctx, mode: str):
-    """Adds the player to the queue for the selected mode."""
-    mode_map = {"l": "land", "c": "conquest", "d": "domination", "lt": "lucky-test"}
+async def queue(ctx, mode: str = "  "):
+    mode_map = {"l": "land", "c": "conquest", "d": "domination", "lt": "luckytest"}
     mode = mode_map.get(mode.lower(), mode)
 
     if ctx.channel.name != "queue":
         await ctx.send("This command is only available in the #queue channel.")
         return
 
-    if mode not in ["land", "conquest", "domination", "lucky-test"]:
-        await ctx.send("Mode must be 'land', 'conquest', 'domination' or 'lucky-test'.")
+    if mode not in ["land", "conquest", "domination", "luckytest"]:
+        await ctx.send("Mode must be 'land', 'conquest', 'domination' or 'luckytest'.")
         return
 
     GameModeID = MODE_MAP.get(mode)
@@ -123,22 +122,41 @@ async def queue(ctx, mode: str):
             try:
                 forum_channel = bot.get_channel(FORUM_CHANNEL_ID)
 
-                player1_name = (await bot.fetch_user(player1)).display_name
-                player2_name = (await bot.fetch_user(player2)).display_name
-
-                thread = await forum_channel.create_thread(
-                    name=f"Match: {player1_name} vs {player2_name} - {mode.capitalize()}",
-                    content=f"Match found: <@{player1}> vs <@{player2}> in {mode} mode!"
-                )
-
-                db.create_match(player1, player2, GameModeID, thread.id)
+                player1_name = (await bot.fetch_user(player1)).name
+                player2_name = (await bot.fetch_user(player2)).name
 
                 player1_elo = db.get_player_rating(player1, GameModeID)
                 player2_elo = db.get_player_rating(player2, GameModeID)
 
-                await thread.send(
-                    f'Match found: <@{player1}> ({player1_elo} ELO) vs <@{player2}> ({player2_elo} ELO) in {mode} mode!'
+                mode_tag_map = {
+                    "land": 1347697308841545769,
+                    "conquest": 1347697335240491038,
+                    "domination": 1347697321395224706,
+                    "luckytest": 1347697354249338993
+                }
+
+                mode_tag_id = mode_tag_map.get(mode)
+
+                available_tags = forum_channel.available_tags
+
+                mode_tag = None
+                for tag in available_tags:
+                    if tag.id == mode_tag_id:
+                        mode_tag = tag
+                        break
+
+                if mode_tag is None:
+                    await ctx.send(f"Could not find the tag for {mode} mode.")
+                    return
+
+                thread = await forum_channel.create_thread(
+                    name=f"{player1_name} vs {player2_name}",
+                    content=f'Match found: <@{player1}> ({player1_elo} ELO) vs <@{player2}> ({player2_elo} ELO) in {mode} mode!',
+                    applied_tags=[mode_tag]
                 )
+
+                db.create_match(player1, player2, GameModeID, thread.thread.id)
+
             except Exception as e:
                 await ctx.send(f"Error creating match: {str(e)}")
 
@@ -180,7 +198,7 @@ async def exit(ctx):
 @bot.command(aliases=["r"])
 async def result(ctx, outcome: str):
     if outcome.lower() not in ["win", "w", "loss", "l"]:
-        await ctx.send("Invalid result. Use `/r win` or `/r loss`.")
+        await ctx.send("Invalid result. Use `/r win` or `/r loss`. ")
         return
 
     match_details = db.get_match_details(ctx.author.id)
@@ -206,7 +224,6 @@ async def result(ctx, outcome: str):
     loser_rating_before = db.get_player_rating(loser_id, GameModeID)
 
     new_winner_rating, new_loser_rating = logic.update_elo(winner_rating_before, loser_rating_before)
-
     db.update_player_rating(winner_id, GameModeID, new_winner_rating)
     db.update_player_rating(loser_id, GameModeID, new_loser_rating)
 
@@ -222,8 +239,9 @@ async def result(ctx, outcome: str):
 
     db.resolve_bets(match_id, winner_id)
 
-
     db.remove_match(winner_id, loser_id)
+
+    await update_leaderboard(GameModeID)
 
     reward, role_id = db.check_win_reward(winner_id)
     if reward:
@@ -235,19 +253,21 @@ async def result(ctx, outcome: str):
                 await member.add_roles(role)
                 await ctx.send(f"{ctx.author.mention} has earned the {reward} reward and the corresponding role!")
 
+    await assign_role_based_on_wins(ctx, winner_id)
+
     await ctx.send(
         f"Match result recorded: <@{winner_id}> wins in {REVERSE_MODE_MAP.get(GameModeID, 'Unknown Mode')} mode!\n"
-        f"Rating change: <@{winner_id}> +{new_winner_rating - winner_rating_before}, {new_winner_rating} \n"
-        f"<@{loser_id}> {new_loser_rating - loser_rating_before}, {new_loser_rating}"
+        f"Rating change:\n<@{winner_id}>, {new_winner_rating} (+{new_winner_rating - winner_rating_before}) \n"
+        f"<@{loser_id}>, {new_loser_rating} ({new_loser_rating - loser_rating_before})"
     )
 
 
-@bot.command(aliases=["lb", "leaderboard"])
+@bot.command(aliases=["lb", "leaderboard", "top"])
 async def leaders(ctx, mode: str = " "):
-    mode_map = {"l": "land", "c": "conquest", "d": "domination", "lt": "lucky-test"}
+    mode_map = {"l": "land", "c": "conquest", "d": "domination", "lt": "luckytest"}
     mode = mode_map.get(mode.lower(), mode.lower())
 
-    if mode not in ["land", "conquest", "domination", "lucky-test"]:
+    if mode not in ["land", "conquest", "domination", "luckytest"]:
         return await ctx.send(f"Invalid mode. Valid modes: {', '.join(mode_map.values())}")
 
     GameModeID = MODE_MAP.get(mode)
@@ -260,6 +280,7 @@ async def leaders(ctx, mode: str = " "):
             return await ctx.send(f"The leaderboard for {mode} mode is empty.")
 
         response = [f"🏆 **Top players ({mode})**"]
+
         for idx, (player_id, elo, matches, wins) in enumerate(leaderboard[:10], 1):
             try:
                 user = await bot.fetch_user(player_id)
@@ -267,9 +288,13 @@ async def leaders(ctx, mode: str = " "):
             except discord.NotFound:
                 display_name = f"Player {player_id}"
 
+            if matches > 0:
+                win_rate = round((wins / matches) * 100, 1)
+            else:
+                win_rate = 0
+
             response.append(
-                f"{idx}. {display_name} - {int(elo)} ELO | "
-                f"{matches} matches | {wins} wins"
+                f"{idx}. {display_name} - **{int(elo)}** ELO | 🏅 WR: **{win_rate}%** ({wins} / {matches})"
             )
 
         await ctx.send("\n".join(response))
@@ -327,7 +352,7 @@ async def history(ctx, limit: int = 11):
 async def elo_graph_cmd(ctx, mode: str = None):
     try:
         if mode is None:
-            await ctx.send("Please specify a mode ('land', 'conquest', 'domination' or 'lucky-test').")
+            await ctx.send("Please specify a mode ('land', 'conquest', 'domination' or 'luckytest').")
             return
 
         mode = mode.lower()
@@ -389,13 +414,23 @@ async def my_elo(ctx):
 
         elo_data = []
         for mode_name, GameModeID in MODE_MAP.items():
-            if len(mode_name) > 1:  # Only use full mode names (e.g., "land", "conquest", "domination")
+            if len(mode_name) > 2:  # Only use full mode names (e.g., "land", "conquest", "domination")
                 elo = db.get_player_rating(player_id, GameModeID)
-                elo_data.append((mode_name.capitalize(), elo))
+
+                if elo == "N/A":
+                    elo_data.append((mode_name.capitalize(), elo, "N/A", "N/A", "N/A"))
+                else:
+                    win_rate = db.get_winrate(player_id, GameModeID)
+                    player_rank, total_players = db.get_player_rank(player_id, GameModeID)
+                    top_percentile = round((player_rank / total_players) * 100, 1) if total_players else 100
+                    elo_data.append((mode_name.capitalize(), elo, win_rate, top_percentile, player_rank))
 
         response = [f"🏆 **{ctx.author.name}'s ELO Ratings**"]
-        for mode_name, elo in elo_data:
-            response.append(f"• {mode_name}: {elo} ELO")
+        for mode_name, elo, win_rate, top_percentile, player_rank in elo_data:
+            if elo == "N/A":
+                response.append(f"- {mode_name}: {elo}")
+            else:
+                response.append(f"- {mode_name}: **{elo}** ELO | 🏅 WR: **{win_rate}%** | 🔝 Top **{top_percentile}%** (#{player_rank})")
 
         await ctx.send("\n".join(response))
     except Exception as e:
@@ -416,43 +451,49 @@ async def balance(ctx):
 async def bet(ctx, amount: int, member: discord.Member):
     bettor_id = ctx.author.id
 
-    bet_side = member.id
-    match_id = db.get_active_match(bet_side)
-
-    if bettor_id is None:
+    bettor_player_id = db.get_player_id(bettor_id)
+    if bettor_player_id is None:
         await ctx.send("You are not registered in the system.")
         return
 
-    if bet_side is None:
-        await ctx.send(f"{member.mention} is not registered in the system.")
-        return
+    bettor_match_id = db.get_active_match(bettor_id)
 
-    if bettor_id == bet_side:
-        await ctx.send("You cannot bet on your own match.")
-        return
+    bet_side = member.id
 
-    if match_id is None:
+    bet_side_match_id = db.get_active_match(bet_side)
+    if bet_side_match_id is None:
         await ctx.send(f"{member.mention} is not in an active match.")
         return
 
-    db.cursor.execute("SELECT id FROM bets WHERE bettor_id = ? AND match_id = ?", (bettor_id, match_id))
+    if bettor_id == bet_side:
+        await ctx.send("You cannot bet on yourself.")
+        return
+
+    if bettor_match_id is not None:
+        bettor_opponent_id = db.get_opponent_id(bettor_id, bettor_match_id)
+
+        if bet_side == bettor_opponent_id:
+            await ctx.send(f"You cannot bet on your current opponent ({member.mention}).")
+            return
+
+    db.cursor.execute("SELECT id FROM bets WHERE bettor_id = ? AND match_id = ?", (bettor_id, bet_side_match_id))
     existing_bet = db.cursor.fetchone()
     if existing_bet:
         await ctx.send("You have already placed a bet on this match.")
         return
 
-    bettor_player_id = db.get_player_id(bettor_id)
     balance = db.get_player_balance(bettor_player_id)
     if balance < amount:
         await ctx.send("You do not have enough tokens to place this bet.")
         return
 
     if amount <= 0 or amount > balance:
-        await ctx.send("Invalid betting amount")
+        await ctx.send("Invalid betting amount.")
         return
 
     db.update_player_balance(bettor_id, balance - amount)
-    db.place_bet(bettor_id, match_id, bet_side, amount)
+    db.place_bet(bettor_id, bet_side_match_id, bet_side, amount)
+
     await ctx.send(f"{ctx.author.mention} placed a bet of {amount} tokens on {member.mention}.")
 
 
@@ -525,5 +566,70 @@ async def matches(ctx):
             response += f"🎮 {player1} vs {player2} | Mode: {mode} | Thread ID: {thread_id}\n"
 
     await ctx.send(response)
+
+
+async def assign_role_based_on_wins(ctx, user_id):
+    member = ctx.guild.get_member(user_id)
+    if member is None:
+        return
+
+    reward_name, role_id = db.check_win_reward(user_id)
+    if role_id:
+        success = await assign_reward_role(member, role_id)
+        if success:
+            await ctx.send(f"{member.mention} has been awarded the role '{reward_name}' for {reward_name}!")
+        else:
+            await ctx.send(f"Could not assign the role '{reward_name}' to {member.mention}.")
+
+
+async def update_leaderboard(GameModeID):
+    channel_map = {
+        1: 1347711976502984744,
+        2: 1347712009181073429,
+        3: 1347712036024483861,
+        4: 1347712063753158796
+    }
+
+    channel_id = channel_map.get(GameModeID)
+    if not channel_id:
+        return
+
+    channel = bot.get_channel(channel_id)
+    if not channel:
+        return
+
+    try:
+        leaderboard = db.get_leaderboard(GameModeID)
+
+        if not leaderboard:
+            await channel.send(f"The leaderboard for {GameModeID} mode is empty.")
+            return
+
+        response = [f"🏆 **Top players**"]
+
+        for idx, (player_id, elo, matches, wins) in enumerate(leaderboard[:], 1):
+            try:
+                user = await bot.fetch_user(player_id)
+                display_name = user.display_name
+            except discord.NotFound:
+                display_name = f"Player {player_id}"
+
+            if matches > 0:
+                win_rate = round((wins / matches) * 100, 1)
+            else:
+                win_rate = 0
+
+            response.append(
+                f"{idx}. {display_name} - **{int(elo)}** ELO | 🏅 WR: **{win_rate}%** ({wins} / {matches})"
+            )
+
+        async for message in channel.history(limit=1):
+            await message.edit(content="\n".join(response))
+            return
+
+        await channel.send("\n".join(response))
+
+    except Exception as e:
+        await channel.send(f"Error fetching leaderboard: {str(e)}")
 
 bot.run(TOKEN)
