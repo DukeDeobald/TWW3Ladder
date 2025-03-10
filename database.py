@@ -466,25 +466,27 @@ class Database:
         wins = self.cursor.fetchone()[0]
 
         if wins >= 100:
-            return "Grand Knight", 123456789012345678  # Replace with actual Grand Knight role ID
+            return "Grand Knight", 1348037384398442597
         elif wins >= 90:
-            return "Knight Commander", 123456789012345679  # Replace with actual Knight Commander role ID
+            return "Knight Commander", 1348037287853953124
         elif wins >= 80:
-            return "Knight", 123456789012345680  # Replace with actual Knight role ID
+            return "Knight", 1348037134132711424
         elif wins >= 70:
-            return "Baron", 123456789012345681  # Replace with actual Baron role ID
+            return "Baron", 1348027387731775573
         elif wins >= 60:
-            return "Lord", 123456789012345682  # Replace with actual Lord role ID
+            return "Lord", 1348027307574431795
         elif wins >= 50:
-            return "Duke", 123456789012345683  # Replace with actual Duke role ID
+            return "Duke", 1348027196605992963
         elif wins >= 40:
-            return "Count", 123456789012345684  # Replace with actual Count role ID
+            return "Count", 1348026929743138896
         elif wins >= 30:
-            return "Squire", 123456789012345685  # Replace with actual Squire role ID
+            return "Squire", 1348026851418706010
         elif wins >= 20:
-            return "Knight Apprentice", 123456789012345686  # Replace with actual Knight Apprentice role ID
+            return "Knight Apprentice", 1348026658925445332
         elif wins >= 10:
-            return "Peasant", 123456789012345687  # Replace with actual Peasant role ID
+            return "Peasant", 1348026610540085269
+        elif wins >= 1:
+            return "Lucky Beginner", 1347689950329704590
 
         return None, None
 

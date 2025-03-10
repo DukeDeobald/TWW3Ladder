@@ -20,6 +20,7 @@ with open("server.txt", "r") as file:
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 db = Database()
@@ -138,16 +139,29 @@ async def queue(ctx, mode: str = "  "):
                 mode_tag_id = mode_tag_map.get(mode)
 
                 available_tags = forum_channel.available_tags
-
-                mode_tag = None
-                for tag in available_tags:
-                    if tag.id == mode_tag_id:
-                        mode_tag = tag
-                        break
+                mode_tag = next((tag for tag in available_tags if tag.id == mode_tag_id), None)
 
                 if mode_tag is None:
                     await ctx.send(f"Could not find the tag for {mode} mode.")
                     return
+
+                mode_rules = {
+                    "land": "**🏰 Land Mode Rules:**\n- ATTACK:\n"
+                      "- Moving into position to initiate an attack\n"
+                      "- Engaging in melee combat\n"
+                      "- Ranged fire\n\n"
+                      "NOT AN ATTACK:\n"
+                      "- Chasing down shattered units\n"
+                      "- Attacking with only single units (exception: artillery or the last remaining units on the battlefield)\n"
+                      "- Using abilities\n\n"
+                      "ADDITIONAL NOTES:\n"
+                      "- If you only have flying units left, you can no longer perform cycle charges.\n"
+                      "- Shots where you cannot manually select a target are never considered an attack."
+                      "- Unit caps should be ON. Only use in-game rules.",
+                    "conquest": "**⚔️ Conquest Mode Rules:**\n- .",
+                    "domination": "**🏆 Domination Mode Rules:**\n- .",
+                    "luckytest": "**🎲 Lucky Test Mode Rules:**\n- **ULTRA FUNDS** (17,000).\n- Each player can roll up to 5 times in total: meaning you can have maximum of 4 factions rolls, and it leaves you with 1 roll for a build. If a player rolls more than 5 times, they receive a technical loss in that battle. (Note: you can use unspent gold to give units chevrons. It is also possible to remove some units, but this money can still only be used for chevrons.).\n- The mode is Conquest, with 600 tickets.\n- Unit caps must be ON.\n- The game is Bo5"
+                }
 
                 thread = await forum_channel.create_thread(
                     name=f"{player1_name} vs {player2_name}",
@@ -157,8 +171,11 @@ async def queue(ctx, mode: str = "  "):
 
                 db.create_match(player1, player2, GameModeID, thread.thread.id)
 
+                await thread.thread.send(mode_rules.get(mode, "No specific rules available for this mode."))
+
             except Exception as e:
                 await ctx.send(f"Error creating match: {str(e)}")
+
 
 
 @bot.command(aliases=["e", "dq", "dequeue", "leave"])
@@ -251,7 +268,6 @@ async def result(ctx, outcome: str):
             role = ctx.guild.get_role(role_id)
             if role:
                 await member.add_roles(role)
-                await ctx.send(f"{ctx.author.mention} has earned the {reward} reward and the corresponding role!")
 
     await assign_role_based_on_wins(ctx, winner_id)
 
@@ -448,7 +464,14 @@ async def balance(ctx):
 
 
 @bot.command()
-async def bet(ctx, amount: int, member: discord.Member):
+async def bet(ctx, amount: int = None, member: discord.Member = None):
+    if amount is None or member is None:
+        await ctx.send("Incorrect usage! Please use the correct format:\n"
+                       "```!bet <amount> @player```"
+                       "Example:\n"
+                       "```!bet 100 @Knight```")
+        return
+
     bettor_id = ctx.author.id
 
     bettor_player_id = db.get_player_id(bettor_id)
@@ -571,6 +594,7 @@ async def matches(ctx):
 async def assign_role_based_on_wins(ctx, user_id):
     member = ctx.guild.get_member(user_id)
     if member is None:
+        print("no member found")
         return
 
     reward_name, role_id = db.check_win_reward(user_id)
