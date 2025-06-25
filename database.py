@@ -73,12 +73,12 @@ class Database:
                 datetime TEXT,
                 FOREIGN KEY (GameModeID) REFERENCES gamemode(id)
             );
-            
+
             INSERT OR IGNORE INTO gamemode (id, name) VALUES (1, 'land');
             INSERT OR IGNORE INTO gamemode (id, name) VALUES (2, 'conquest');
             INSERT OR IGNORE INTO gamemode (id, name) VALUES (3, 'domination');
-            INSERT OR IGNORE INTO gamemode (id, name) VALUES (4, 'luckytest');
-            
+            INSERT OR IGNORE INTO gamemode (id, name) VALUES (4, 'luckydice');
+
             CREATE TABLE IF NOT EXISTS bets (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 match_id INTEGER,
@@ -90,7 +90,7 @@ class Database:
                 FOREIGN KEY (match_id) REFERENCES matches(id),
                 FOREIGN KEY (bettor_id) REFERENCES players(id)
             );
-            
+
             CREATE TABLE IF NOT EXISTS user_rewards (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER,
@@ -100,7 +100,7 @@ class Database:
                 expires_at TEXT NULL,
                 FOREIGN KEY (user_id) REFERENCES players(id) ON DELETE CASCADE
             );
-            
+
             CREATE TABLE IF NOT EXISTS logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT DEFAULT (datetime('now')),
@@ -108,12 +108,6 @@ class Database:
                 user_id INTEGER NOT NULL,
                 user_name TEXT NOT NULL
             );
-            
-            INSERT INTO user_rewards (user_id, reward_name, role_id, awarded_at, expires_at)
-            VALUES
-                (1, 'Champion', 123456789, datetime('now'), NULL),
-                (2, 'Elite Gambler', 987654321, datetime('now'), datetime('now', '+30 days')),
-                (3, 'High Roller', 567891234, datetime('now'), datetime('now', '+60 days'));
         """)
         self.conn.commit()
 
@@ -524,7 +518,11 @@ class Database:
 
     def get_current_matches(self):
         self.cursor.execute("""
-            SELECT p1.discord_id, p2.discord_id, g.name, m.lobby 
+            SELECT 
+                p1.discord_id, 
+                p2.discord_id, 
+                g.name, 
+                m.thread_id  
             FROM matches m
             JOIN players p1 ON m.player1 = p1.id
             JOIN players p2 ON m.player2 = p2.id
