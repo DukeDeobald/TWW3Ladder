@@ -1,0 +1,5 @@
+discord.py
+matplotlib
+seaborn
+pandas
+python-dotenv

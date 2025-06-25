@@ -159,8 +159,11 @@ class Matches(commands.Cog):
                           "- If you only have flying units left, you can no longer perform cycle charges.\n"
                           "- Shots where you cannot manually select a target are never considered an attack."
                           "- Unit caps should be ON. Only use in-game rules.",
-                        "conquest": "**⚔️ Conquest Mode Rules:**\n- .",
-                        "domination": "**🏆 Domination Mode Rules:**\n- .",
+                        "conquest": "**⚔️ Conquest Mode Rules:**\n-"
+                                    "Unit caps MUST be ON.\n"
+                                    "Tickets set to 650",
+                        "domination": "**🏆 Domination Mode Rules:**\n- "
+                                      "Unit caps MUST be ON.",
                         "luckydice": "**🎲 Lucky Dice Mode Rules:**\n- **ULTRA FUNDS** (17,000).\n- Each player can roll up to 5 times in total: meaning you can have maximum of 4 factions rolls, and it leaves you with 1 roll for a build. If a player rolls more than 5 times, they receive a technical loss in that battle. (Note: you can use unspent gold to give units chevrons. It is also possible to remove some units, but this money can still only be used for chevrons.).\n- The mode is Conquest, with 600 tickets.\n- Unit caps must be ON.\n- The game is Bo5"
                     }
 
