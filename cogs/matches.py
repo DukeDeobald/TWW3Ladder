@@ -332,12 +332,22 @@ class Matches(commands.Cog):
             print("no member found")
             return
 
-        reward_name, role_id = self.db.check_win_reward(user_id)
+        reward_name, role_id, roles_to_remove_ids = self.db.check_win_reward(user_id)
+
+        if roles_to_remove_ids:
+            for role_to_remove_id in roles_to_remove_ids:
+                role = member.guild.get_role(role_to_remove_id)
+                if role and role in member.roles:
+                    await member.remove_roles(role)
+                    self.db.cursor.execute("DELETE FROM user_rewards WHERE user_id = ? AND role_id = ?",
+                                            (self.db.get_player_id(user_id), role_to_remove_id))
+                    self.db.conn.commit()
+
         if role_id:
-            self.db.assign_reward(user_id, reward_name, role_id)
+            self.db.assign_reward(self.db.get_player_id(user_id), reward_name, role_id)
             success = await self.assign_reward_role(member, role_id)
             if success:
-                await ctx.send(f"{member.mention} has been awarded the role '{reward_name}'!")
+                await ctx.send(f"{member.mention} has been promoted to **{reward_name}**!")
             else:
                 await ctx.send(f"Could not assign the role '{reward_name}' to {member.mention}.")
 

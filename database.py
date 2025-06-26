@@ -456,33 +456,47 @@ class Database:
 
     def check_win_reward(self, discord_id):
         user_id = self.get_player_id(discord_id)
+        if not user_id:
+            return None, None, None
+
         self.cursor.execute("SELECT COUNT(*) FROM match_history WHERE winner = ?", (user_id,))
         wins = self.cursor.fetchone()[0]
 
-        if wins >= 100:
-            return "Grand Knight", 1348037384398442597
-        elif wins >= 90:
-            return "Knight Commander", 1348037287853953124
-        elif wins >= 80:
-            return "Knight", 1348037134132711424
-        elif wins >= 70:
-            return "Baron", 1348027387731775573
-        elif wins >= 60:
-            return "Lord", 1348027307574431795
-        elif wins >= 50:
-            return "Duke", 1348027196605992963
-        elif wins >= 40:
-            return "Count", 1348026929743138896
-        elif wins >= 30:
-            return "Squire", 1348026851418706010
-        elif wins >= 20:
-            return "Knight Apprentice", 1348026658925445332
-        elif wins >= 10:
-            return "Peasant", 1348026610540085269
-        elif wins >= 1:
-            return "Lucky Beginner", 1347689950329704590
+        roles = [
+            (100, "Grand Knight", 1348037384398442597),
+            (90, "Knight Commander", 1348037287853953124),
+            (80, "Knight", 1348037134132711424),
+            (70, "Baron", 1348027387731775573),
+            (60, "Lord", 1348027307574431795),
+            (50, "Duke", 1348027196605992963),
+            (40, "Count", 1348026929743138896),
+            (30, "Squire", 1348026851418706010),
+            (20, "Knight Apprentice", 1348026658925445332),
+            (10, "Peasant", 1348026610540085269),
+            (1, "Lucky Beginner", 1347689950329704590)
+        ]
 
-        return None, None
+        self.cursor.execute("SELECT role_id FROM user_rewards WHERE user_id = ?", (user_id,))
+        awarded_roles_ids = {row[0] for row in self.cursor.fetchall()}
+
+        highest_role_to_award = None
+        roles_to_remove = set()
+
+        for i, (win_req, role_name, role_id) in enumerate(roles):
+            if wins >= win_req:
+                if role_id not in awarded_roles_ids:
+                    highest_role_to_award = (role_name, role_id)
+                    # Mark all lower-tier roles for removal
+                    for j in range(i + 1, len(roles)):
+                        lower_role_id = roles[j][2]
+                        if lower_role_id in awarded_roles_ids:
+                            roles_to_remove.add(lower_role_id)
+                    break  # Stop after finding the highest new role
+
+        if highest_role_to_award:
+            return highest_role_to_award[0], highest_role_to_award[1], list(roles_to_remove)
+
+        return None, None, None
 
     def assign_reward(self, user_id, reward_name, role_id, expires_at=None):
         now = datetime.now().isoformat()
