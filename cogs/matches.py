@@ -6,7 +6,7 @@ import random
 from database import Database
 from logic import update_elo
 
-from utils.maps import MODE_MAP, REVERSE_MODE_MAP
+from utils.maps import MODE_MAP, REVERSE_MODE_MAP, domination_constant_maps, season0_domination_maps, conquest_maps, land_maps
 
 class Matches(commands.Cog):
     def __init__(self, bot):
@@ -94,11 +94,30 @@ class Matches(commands.Cog):
                     player1_elo = self.db.get_player_rating(player1, GameModeID)
                     player2_elo = self.db.get_player_rating(player2, GameModeID)
 
+                    # --- Map Selection Logic ---
+                    selected_maps = []
+                    if mode == "domination":
+                        if len(domination_constant_maps) >= 2 and len(season0_domination_maps) >= 1:
+                            selected_maps.extend(random.sample(domination_constant_maps, 2))
+                            selected_maps.append(random.choice(season0_domination_maps))
+                            random.shuffle(selected_maps)
+                    elif mode == "conquest" or mode == "luckydice":
+                        if len(conquest_maps) >= 3:
+                            selected_maps = random.sample(conquest_maps, 3)
+                    elif mode == "land":
+                        if len(land_maps) >= 3:
+                            selected_maps = random.sample(land_maps, 3)
+
+                    maps_message = "" 
+                    if selected_maps:
+                        maps_message = "\n\n**🗺️ Maps for this match:**\n> • " + "\n> • ".join(selected_maps)
+                    # ------------------------
+
                     mode_tag_map = {
-                        "land": 1347697308841545769,
-                        "conquest": 1347697335240491038,
-                        "domination": 1347697321395224706,
-                        "luckydice": 1347697354249338993
+                        "land": 1387922476243226635,
+                        "conquest": 1387922512385544285,
+                        "domination": 1387922530647539842,
+                        "luckydice": 1387922551979905054
                     }
 
                     mode_tag_id = mode_tag_map.get(mode)
@@ -163,12 +182,16 @@ class Matches(commands.Cog):
                                     "Unit caps MUST be ON.\n"
                                     "Tickets set to 650",
                         "domination": "**🏆 Domination Mode Rules:**\n- "
-                                      "Unit caps MUST be ON.",
+                                      "Unit caps MUST be ON.\n"
+                                      "Default funds\n"
+                                      "Ultra units scale\n"
+                                      "Tickets set to 1500",
                         "luckydice": "**🎲 Lucky Dice Mode Rules:**\n- **ULTRA FUNDS** (17,000).\n- Each player can roll up to 5 times in total: meaning you can have maximum of 4 factions rolls, and it leaves you with 1 roll for a build. If a player rolls more than 5 times, they receive a technical loss in that battle. (Note: you can use unspent gold to give units chevrons. It is also possible to remove some units, but this money can still only be used for chevrons.).\n- The mode is Conquest, with 600 tickets.\n- Unit caps must be ON.\n- The game is Bo5"
                     }
 
                     if mode in mode_rules:
                         await thread.thread.send(mode_rules[mode])
+                        await thread.thread.send(maps_message)
 
                     self.db.create_match(player1, player2, GameModeID, thread.thread.id)
 
