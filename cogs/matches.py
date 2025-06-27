@@ -138,7 +138,7 @@ class Matches(commands.Cog):
                         > • **Player 2**: <@{player2}>
                         """)
 
-                        if mode_name == "land" or "conquest":
+                        if mode_name in ["land", "conquest"]:
                             await thread.thread.send("""
                             **⚔️ Pick/Ban System Rules**
     
