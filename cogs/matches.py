@@ -15,14 +15,14 @@ class Matches(commands.Cog):
         self.mode_map = MODE_MAP
         self.reverse_mode_map = REVERSE_MODE_MAP
 
-    @commands.command(aliases=["s"])
+    @commands.command(aliases=["s", "S"])
     async def status(self, ctx):
         player_id = ctx.author.id
+        queue_statuses = self.db.get_queue_status(player_id)
 
-        queue_status = self.db.get_queue_status(player_id)
-        if queue_status:
-            mode_name = self.reverse_mode_map.get(queue_status, "Unknown Mode")
-            await ctx.send(f'{ctx.author.name}, you are in the queue for {mode_name} mode.')
+        if queue_statuses:
+            mode_names = [self.reverse_mode_map.get(qs, "Unknown Mode") for qs in queue_statuses]
+            await ctx.send(f"{ctx.author.name}, you are in the queue for the following modes: {', '.join(mode_names)}.")
             return
 
         match_details = self.db.get_match_details(player_id)
@@ -39,180 +39,209 @@ class Matches(commands.Cog):
         else:
             await ctx.send(f'{ctx.author.name}, you are not in queue or in a match.')
 
-    @commands.command(aliases=["q"])
-    async def queue(self, ctx, mode: str = "  "):
-        mode_map = {"l": "land", "c": "conquest", "d": "domination", "ld": "luckydice"}
-        mode = mode_map.get(mode.lower(), mode)
-
+    @commands.command(aliases=["q", "Q", "Queue"])
+    async def queue(self, ctx, *, modes: str):
         if ctx.channel.name != "queue":
             await ctx.send("This command is only available in the #queue channel.")
             return
 
-        if mode not in ["land", "conquest", "domination", "luckydice"]:
-            await ctx.send("Mode must be 'land', 'conquest', 'domination' or 'luckydice'.")
-            return
-
-        GameModeID = self.mode_map.get(mode)
-        if not GameModeID:
-            await ctx.send("Invalid mode.")
+        mode_map = {"l": "land", "c": "conquest", "d": "domination", "ld": "luckydice"}
+        requested_modes = [mode.strip() for mode in modes.split(',')]
+        
+        if not requested_modes:
+            await ctx.send("Please specify at least one mode to queue for.")
             return
 
         self.db.add_player(ctx.author.id)
-        self.db.add_player_mode(ctx.author.id, GameModeID)
 
-        queue_status = self.db.get_queue_status(ctx.author.id)
-        if queue_status:
-            mode_name = self.reverse_mode_map.get(queue_status, "Unknown Mode")
-            await ctx.send(f'{ctx.author.name}, you are already in the queue for {mode_name} mode.')
-            return
+        queued_modes = []
+        for mode_arg in requested_modes:
+            mode_name = mode_map.get(mode_arg.lower(), mode_arg)
+            if mode_name not in self.mode_map:
+                await ctx.send(f"Invalid mode: '{mode_name}'.")
+                continue
 
-        match_details = self.db.get_match_details(ctx.author.id)
-        if match_details and all(match_details):
-            await ctx.send(
-                f"{ctx.author.name}, you are already in a match. Please finish your current match before queuing again.")
-            return
+            game_mode_id = self.mode_map[mode_name]
+            self.db.add_player_mode(ctx.author.id, game_mode_id)
 
-        self.db.add_to_queue(ctx.author.id, GameModeID)
-        player_count = self.db.get_queue_players_count(GameModeID)
+            if game_mode_id in self.db.get_queue_status(ctx.author.id):
+                await ctx.send(f"{ctx.author.name}, you are already in the queue for {mode_name} mode.")
+                continue
 
-        await ctx.send(f'{ctx.author.mention} joined the queue for {mode} mode. Players in queue: {player_count}.')
+            match_details = self.db.get_match_details(ctx.author.id)
+            if match_details and all(match_details):
+                await ctx.send(f"{ctx.author.name}, you are already in a match. Please finish it before queuing again.")
+                return
 
-        if player_count >= 2:
-            queue_players = self.db.get_queue_players(GameModeID)
-            if len(queue_players) >= 2:
-                players = [queue_players[0][0], queue_players[1][0]]
-                random.shuffle(players)
-                player1, player2 = players[0], players[1]
+            self.db.add_to_queue(ctx.author.id, game_mode_id)
+            player_count = self.db.get_queue_players_count(game_mode_id)
+            await ctx.send(f"{ctx.author.mention} joined the queue for {mode_name} mode. Players in queue: {player_count}.")
+            queued_modes.append(mode_name)
 
-                self.db.mark_as_matched(player1)
-                self.db.mark_as_matched(player2)
+            if player_count >= 2:
+                queue_players = self.db.get_queue_players(game_mode_id)
+                if len(queue_players) >= 2:
+                    players = [queue_players[0][0], queue_players[1][0]]
+                    random.shuffle(players)
+                    player1, player2 = players[0], players[1]
 
-                try:
-                    forum_channel = self.bot.get_channel(self.bot.config.FORUM_CHANNEL_ID)
-                    player1_name = (await self.bot.fetch_user(player1)).name
-                    player2_name = (await self.bot.fetch_user(player2)).name
-                    player1_elo = self.db.get_player_rating(player1, GameModeID)
-                    player2_elo = self.db.get_player_rating(player2, GameModeID)
+                    self.db.remove_from_all_queues(player1)
+                    self.db.remove_from_all_queues(player2)
+                    try:
+                        forum_channel = self.bot.get_channel(self.bot.config.FORUM_CHANNEL_ID)
+                        player1_name = (await self.bot.fetch_user(player1)).name
+                        player2_name = (await self.bot.fetch_user(player2)).name
+                        player1_elo = self.db.get_player_rating(player1, game_mode_id)
+                        player2_elo = self.db.get_player_rating(player2, game_mode_id)
 
-                    # --- Map Selection Logic ---
-                    selected_maps = []
-                    if mode == "domination":
-                        if len(domination_constant_maps) >= 2 and len(season0_domination_maps) >= 1:
-                            selected_maps.extend(random.sample(domination_constant_maps, 2))
-                            selected_maps.append(random.choice(season0_domination_maps))
-                            random.shuffle(selected_maps)
-                    elif mode == "conquest" or mode == "luckydice":
-                        if len(conquest_maps) >= 3:
-                            selected_maps = random.sample(conquest_maps, 3)
-                    elif mode == "land":
-                        if len(land_maps) >= 3:
-                            selected_maps = random.sample(land_maps, 3)
+                        selected_maps = []
+                        if mode_name == "domination":
+                            if len(domination_constant_maps) >= 2 and len(season0_domination_maps) >= 1:
+                                selected_maps.extend(random.sample(domination_constant_maps, 2))
+                                selected_maps.append(random.choice(season0_domination_maps))
+                                random.shuffle(selected_maps)
+                        elif mode_name == "conquest" or mode_name == "luckydice":
+                            if len(conquest_maps) >= 3:
+                                selected_maps = random.sample(conquest_maps, 3)
+                        elif mode_name == "land":
+                            if len(land_maps) >= 3:
+                                selected_maps = random.sample(land_maps, 3)
 
-                    maps_message = "" 
-                    if selected_maps:
-                        maps_message = "\n\n**🗺️ Maps for this match:**\n> • " + "\n> • ".join(selected_maps)
-                    # ------------------------
+                        maps_message = "" 
+                        if selected_maps:
+                            maps_message = "\n\n**🗺️ Maps for this match:**\n> • " + "\n> • ".join(selected_maps)
 
-                    mode_tag_map = {
-                        "land": 1387922476243226635,
-                        "conquest": 1387922512385544285,
-                        "domination": 1387922530647539842,
-                        "luckydice": 1387922551979905054
-                    }
+                        mode_tag_map = {
+                            "land": 1387922476243226635,
+                            "conquest": 1387922512385544285,
+                            "domination": 1387922530647539842,
+                            "luckydice": 1387922551979905054
+                        }
 
-                    mode_tag_id = mode_tag_map.get(mode)
-                    available_tags = forum_channel.available_tags
-                    mode_tag = next((tag for tag in available_tags if tag.id == mode_tag_id), None)
+                        mode_tag_id = mode_tag_map.get(mode_name)
+                        available_tags = forum_channel.available_tags
+                        mode_tag = next((tag for tag in available_tags if tag.id == mode_tag_id), None)
 
-                    thread = await forum_channel.create_thread(
-                        name=f"{player1_name} vs {player2_name}",
-                        content=f'Match found: <@{player1}> ({player1_elo} ELO) vs <@{player2}> ({player2_elo} ELO) in {mode} mode!',
-                        applied_tags=[mode_tag]
-                    )
+                        thread = await forum_channel.create_thread(
+                            name=f"{player1_name} vs {player2_name}",
+                            content=f'Match found: <@{player1}> ({player1_elo} ELO) vs <@{player2}> ({player2_elo} ELO) in {mode_name} mode!',
+                            applied_tags=[mode_tag]
+                        )
 
-                    if mode_tag is None:
-                        await ctx.send(f"Could not find the tag for {mode} mode.")
-                        return
+                        if mode_tag is None:
+                            await ctx.send(f"Could not find the tag for {mode_name} mode.")
+                            return
 
-                    await thread.thread.send(f"""
-                    **🔀 Player Roles (Randomly Assigned):**
-                    > • **Player 1**: <@{player1}>
-                    > • **Player 2**: <@{player2}>
-                    """)
+                        await thread.thread.send(f"""
+                        **🔀 Player Roles (Randomly Assigned):**
+                        > • **Player 1**: <@{player1}>
+                        > • **Player 2**: <@{player2}>
+                        """)
 
-                    await thread.thread.send("""
-                    **⚔️ Pick/Ban System Rules**
+                        if mode_name == "land" or "conquest":
+                            await thread.thread.send("""
+                            **⚔️ Pick/Ban System Rules**
+    
+                            __**1. Global Bans Phase**__
+                            > • Player 1 bans 1 faction (globally banned)
+                            > • Player 2 bans 1 faction (globally banned)
+    
+                            __**2. Game 1**__
+                            > • Player 1 pre-picks 3 factions and bans 1 faction for Player 2  
+                            > • Player 2 bans 1 faction from Player 1's pre-picks, then picks their faction  
+                            > • Player 1 chooses one of their 2 remaining factions
+    
+                            __**3. Game 2**__
+                            > • Player 2 pre-picks 3 factions and bans 1 faction for Player 1  
+                            > • Player 1 bans 1 faction from Player 2's pre-picks, then picks their faction  
+                            > • Player 2 chooses one of their 2 remaining factions
+    
+                            __**4. Game 3 (If tied 1-1)**__
+                            > • Winner of Game 2 pre-picks 2 factions and bans 1 for the opponent  
+                            > • Opponent picks their faction  
+                            > • Winner selects one of their 2 pre-picked factions
+    
+                            🔔 **Players should coordinate their picks/bans in this thread.**
+                            """)
 
-                    __**1. Global Bans Phase**__
-                    > • Player 1 bans 1 faction (globally banned)
-                    > • Player 2 bans 1 faction (globally banned)
+                        elif mode_name == "domination":
+                            await thread.thread.send("""
+                            Actions described below use https://aoe2cm.net/preset/dEQGL
+                            Each player has 1 unrestricted global ban. After that players will pick factions in order 1-2 2-1. The final pick will be determined through blind pick.
+                            After picks are done, each player bans 4 out of 9 potential matchups (use 1-2-2-2-1 pattern, where player 1 starts). Once all bans are settled, the remaining matchup is the one that will be played.
+                            For simplicity, you can use this ban matrix template:
+                            -----  WE  EMP  NOR
+                            VP     o   o    o
+                            BM     o   o    o
+                            BR     o   o    o
+                            """)
 
-                    __**2. Game 1**__
-                    > • Player 1 pre-picks 3 factions and bans 1 faction for Player 2  
-                    > • Player 2 bans 1 faction from Player 1's pre-picks, then picks their faction  
-                    > • Player 1 chooses one of their 2 remaining factions
+                        mode_rules = {
+                            "land": "**🏰 Land Mode Rules:**\n- ATTACK:\n"
+                              "- Moving into position to initiate an attack\n"
+                              "- Engaging in melee combat\n"
+                              "- Ranged fire\n\n"
+                              "NOT AN ATTACK:\n"
+                              "- Chasing down shattered units\n"
+                              "- Attacking with only single units (exception: artillery or the last remaining units on the battlefield)\n"
+                              "- Using abilities\n\n"
+                              "ADDITIONAL NOTES:\n"
+                              "- If you only have flying units left, you can no longer perform cycle charges.\n"
+                              "- Shots where you cannot manually select a target are never considered an attack."
+                              "- Unit caps should be ON. Only use in-game rules.",
+                            "conquest": "**⚔️ Conquest Mode Rules:**\n-"
+                                        "Unit caps MUST be ON.\n"
+                                        "Tickets set to 650",
+                            "domination": "**🏆 Domination Mode Rules:**\n- "
+                                          "Unit caps MUST be ON.\n"
+                                          "Default funds\n"
+                                          "Ultra units scale\n"
+                                          "Tickets set to 1500",
+                            "luckydice": "**🎲 Lucky Dice Mode Rules:**\n- **ULTRA FUNDS** (17,000).\n- Each player can roll up to 5 times in total: meaning you can have maximum of 4 factions rolls, and it leaves you with 1 roll for a build. If a player rolls more than 5 times, they receive a technical loss in that battle. (Note: you can use unspent gold to give units chevrons. It is also possible to remove some units, but this money can still only be used for chevrons.).\n- The mode is Conquest, with 600 tickets.\n- Unit caps must be ON.\n"
+                        }
 
-                    __**3. Game 2**__
-                    > • Player 2 pre-picks 3 factions and bans 1 faction for Player 1  
-                    > • Player 1 bans 1 faction from Player 2's pre-picks, then picks their faction  
-                    > • Player 2 chooses one of their 2 remaining factions
+                        if mode_name in mode_rules:
+                            await thread.thread.send(mode_rules[mode_name])
+                            await thread.thread.send(maps_message)
 
-                    __**4. Game 3 (If tied 1-1)**__
-                    > • Winner of Game 2 pre-picks 2 factions and bans 1 for the opponent  
-                    > • Opponent picks their faction  
-                    > • Winner selects one of their 2 pre-picked factions
+                        self.db.create_match(player1, player2, game_mode_id, thread.thread.id)
 
-                    🔔 **Players should coordinate their picks/bans in this thread.**
-                    """)
+                    except (discord.HTTPException, discord.Forbidden) as e:
+                        await ctx.send(f"Error creating match thread: {e}")
+                    except Exception as e:
+                        await ctx.send(f"An unexpected error occurred while creating the match: {e}")
 
-                    mode_rules = {
-                        "land": "**🏰 Land Mode Rules:**\n- ATTACK:\n"
-                          "- Moving into position to initiate an attack\n"
-                          "- Engaging in melee combat\n"
-                          "- Ranged fire\n\n"
-                          "NOT AN ATTACK:\n"
-                          "- Chasing down shattered units\n"
-                          "- Attacking with only single units (exception: artillery or the last remaining units on the battlefield)\n"
-                          "- Using abilities\n\n"
-                          "ADDITIONAL NOTES:\n"
-                          "- If you only have flying units left, you can no longer perform cycle charges.\n"
-                          "- Shots where you cannot manually select a target are never considered an attack."
-                          "- Unit caps should be ON. Only use in-game rules.",
-                        "conquest": "**⚔️ Conquest Mode Rules:**\n-"
-                                    "Unit caps MUST be ON.\n"
-                                    "Tickets set to 650",
-                        "domination": "**🏆 Domination Mode Rules:**\n- "
-                                      "Unit caps MUST be ON.\n"
-                                      "Default funds\n"
-                                      "Ultra units scale\n"
-                                      "Tickets set to 1500",
-                        "luckydice": "**🎲 Lucky Dice Mode Rules:**\n- **ULTRA FUNDS** (17,000).\n- Each player can roll up to 5 times in total: meaning you can have maximum of 4 factions rolls, and it leaves you with 1 roll for a build. If a player rolls more than 5 times, they receive a technical loss in that battle. (Note: you can use unspent gold to give units chevrons. It is also possible to remove some units, but this money can still only be used for chevrons.).\n- The mode is Conquest, with 600 tickets.\n- Unit caps must be ON.\n- The game is Bo5"
-                    }
-
-                    if mode in mode_rules:
-                        await thread.thread.send(mode_rules[mode])
-                        await thread.thread.send(maps_message)
-
-                    self.db.create_match(player1, player2, GameModeID, thread.thread.id)
-
-                except (discord.HTTPException, discord.Forbidden) as e:
-                    await ctx.send(f"Error creating match thread: {e}")
-                except Exception as e:
-                    await ctx.send(f"An unexpected error occurred while creating the match: {e}")
-
-    @commands.command(aliases=["e", "dq", "dequeue", "leave"])
-    async def exit(self, ctx):
+    @commands.command(aliases=["e", "dq", "dequeue", "leave", "E", "DQ", "Dequeue", "Leave", "Dq"])
+    async def exit(self, ctx, *, modes: str = None):
         player_id = ctx.author.id
 
-        queue_status = self.db.get_queue_status(player_id)
-        if queue_status:
-            self.db.mark_as_unqueued(player_id)
-            mode_name = self.reverse_mode_map.get(queue_status, "Unknown Mode")
-            await ctx.send(f"{ctx.author.name} left the queue for {mode_name} mode.")
+        if modes is None:
+            queue_statuses = self.db.get_queue_status(player_id)
+            if queue_statuses:
+                for queue_status in queue_statuses:
+                    self.db.mark_as_unqueued(player_id, queue_status)
+                    mode_name = self.reverse_mode_map.get(queue_status, "Unknown Mode")
+                    await ctx.send(f"{ctx.author.name} left the queue for {mode_name} mode.")
+                return
+        else:
+            mode_map = {"l": "land", "c": "conquest", "d": "domination", "ld": "luckydice"}
+            requested_modes = [mode.strip() for mode in modes.split(',')]
+
+            for mode_arg in requested_modes:
+                mode_name = mode_map.get(mode_arg.lower(), mode_arg)
+                if mode_name not in self.mode_map:
+                    await ctx.send(f"Invalid mode: '{mode_name}'.")
+                    continue
+
+                game_mode_id = self.mode_map[mode_name]
+                if game_mode_id in self.db.get_queue_status(player_id):
+                    self.db.mark_as_unqueued(player_id, game_mode_id)
+                    await ctx.send(f"{ctx.author.name} left the queue for {mode_name} mode.")
+                else:
+                    await ctx.send(f"{ctx.author.name}, you are not in the queue for {mode_name} mode.")
             return
 
         match_details = self.db.get_match_details(player_id)
-
         if match_details and all(match_details):
             opponent, GameModeID = match_details
             mode_name = self.reverse_mode_map.get(GameModeID, "Unknown Mode")
@@ -233,7 +262,7 @@ class Matches(commands.Cog):
 
         await ctx.send(f"{ctx.author.name}, you are not in queue or in an active match.")
 
-    @commands.command(aliases=["r"])
+    @commands.command(aliases=["r", "R"])
     async def result(self, ctx, outcome: str):
         if outcome.lower() not in ["win", "w", "loss", "l"]:
             await ctx.send("Invalid result. Use `/r win` or `/r loss`. ")
@@ -288,7 +317,7 @@ class Matches(commands.Cog):
             f"<@{loser_id}>, {new_loser_rating} ({new_loser_rating - loser_rating_before})"
         )
 
-    @commands.command(aliases=["m"])
+    @commands.command(aliases=["m", "M"])
     async def matches(self, ctx):
         try:
             self.db.cursor.execute("""

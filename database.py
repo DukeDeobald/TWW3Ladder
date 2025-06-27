@@ -37,7 +37,7 @@ class Database:
             );
 
             CREATE TABLE IF NOT EXISTS queue (
-                discord_id INTEGER UNIQUE, 
+                discord_id INTEGER,
                 GameModeID INTEGER,
                 is_matched BOOLEAN DEFAULT FALSE,
                 is_unqueued BOOLEAN DEFAULT FALSE,
@@ -46,6 +46,7 @@ class Database:
                 timestamp_unqueued TEXT,
                 created_at TEXT DEFAULT (datetime('now')),
                 updated_at TEXT DEFAULT (datetime('now')),
+                PRIMARY KEY (discord_id, GameModeID),
                 FOREIGN KEY (GameModeID) REFERENCES gamemode(id)
             );
 
@@ -173,15 +174,11 @@ class Database:
     def add_to_queue(self, discord_id, GameModeID):
         now = datetime.now().isoformat()
         self.cursor.execute("""
-            INSERT INTO queue (discord_id, GameModeID, timestamp_queued, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?)
-            ON CONFLICT(discord_id) DO UPDATE SET
-                GameModeID = excluded.GameModeID,
-                is_matched = FALSE,
+            INSERT INTO queue (discord_id, GameModeID, timestamp_queued, created_at, updated_at, is_unqueued)
+            VALUES (?, ?, ?, ?, ?, FALSE)
+            ON CONFLICT(discord_id, GameModeID) DO UPDATE SET
                 is_unqueued = FALSE,
                 timestamp_queued = excluded.timestamp_queued,
-                timestamp_matched = NULL,
-                timestamp_unqueued = NULL,
                 updated_at = excluded.updated_at
         """, (discord_id, GameModeID, now, now, now))
         self.conn.commit()
@@ -192,28 +189,17 @@ class Database:
             user_name = user[0]
             self.log_event("add_to_queue", discord_id, user_name)
 
-    def mark_as_matched(self, discord_id):
-        now = datetime.now().isoformat()
-        self.cursor.execute("""
-            UPDATE queue 
-            SET is_matched = TRUE, timestamp_matched = ?, updated_at = ?
-            WHERE discord_id = ?
-        """, (now, now, discord_id))
+    def remove_from_all_queues(self, discord_id):
+        self.cursor.execute("DELETE FROM queue WHERE discord_id = ?", (discord_id,))
         self.conn.commit()
 
-        self.cursor.execute("SELECT discord_id FROM players WHERE discord_id = ?", (discord_id,))
-        user = self.cursor.fetchone()
-        if user:
-            user_name = user[0]
-            self.log_event("mark_as_matched", discord_id, user_name)
-
-    def mark_as_unqueued(self, discord_id):
+    def mark_as_unqueued(self, discord_id, GameModeID):
         now = datetime.now().isoformat()
         self.cursor.execute("""
             UPDATE queue 
             SET is_unqueued = TRUE, timestamp_unqueued = ?
-            WHERE discord_id = ?
-        """, (now, discord_id))
+            WHERE discord_id = ? AND GameModeID = ?
+        """, (now, discord_id, GameModeID))
         self.conn.commit()
 
         self.cursor.execute("SELECT discord_id FROM players WHERE discord_id = ?", (discord_id,))
@@ -287,8 +273,8 @@ class Database:
             SELECT GameModeID FROM queue 
             WHERE discord_id = ? AND is_matched = FALSE AND is_unqueued = FALSE
         """, (player_id,))
-        result = self.cursor.fetchone()
-        return result[0] if result else None
+        results = self.cursor.fetchall()
+        return [result[0] for result in results] if results else []
 
     def get_match_details(self, player_id):
         self.cursor.execute("""

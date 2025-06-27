@@ -17,7 +17,7 @@ class Leaderboard(commands.Cog):
         self.mode_map = MODE_MAP
         self.reverse_mode_map = REVERSE_MODE_MAP
 
-    @commands.command(aliases=["lb", "leaderboard", "top"])
+    @commands.command(aliases=["lb", "leaderboard", "top", "LB", "Lb", "Top"])
     async def leaders(self, ctx, mode: str = " "):
         mode_map = {"l": "land", "c": "conquest", "d": "domination", "ld": "luckydice"}
         mode = mode_map.get(mode.lower(), mode.lower())
@@ -58,7 +58,7 @@ class Leaderboard(commands.Cog):
         except Exception as e:
             await ctx.send(f"An unexpected error occurred while fetching the leaderboard: {e}")
 
-    @commands.command(aliases=["h"])
+    @commands.command(aliases=["h", "H"])
     async def history(self, ctx, limit: int = 11):
         try:
             matches = self.db.get_match_history(ctx.author.id, limit)
@@ -103,7 +103,7 @@ class Leaderboard(commands.Cog):
         except Exception as e:
             await ctx.send(f"Error fetching history: {str(e)}")
 
-    @commands.command(aliases=["elo"])
+    @commands.command(aliases=["elo", "Elo", "ELO"])
     async def elo_graph_cmd(self, ctx, mode: str = None):
         try:
             if mode is None:
@@ -161,7 +161,7 @@ class Leaderboard(commands.Cog):
         except Exception as e:
             await ctx.send(f"Error generating ELO graph: {str(e)}")
 
-    @commands.command(aliases=["myelo"])
+    @commands.command(aliases=["myelo", "Myelo", "MYELO"])
     async def my_elo(self, ctx):
         try:
             player_id = ctx.author.id
