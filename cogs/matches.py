@@ -166,6 +166,8 @@ class Matches(commands.Cog):
 
                         elif mode_name == "domination":
                             await thread.thread.send("""
+                            The match is Bo1!
+                            Out of 3 presented maps, P1 bans 1, then P2 bans another. After that factions are picked and banned in the following steps.
                             Actions described below use https://aoe2cm.net/preset/dEQGL
                             Each player has 1 unrestricted global ban. After that players will pick factions in order 1-2 2-1. The final pick will be determined through blind pick.
                             After picks are done, each player bans 4 out of 9 potential matchups (use 1-2-2-2-1 pattern, where player 1 starts). Once all bans are settled, the remaining matchup is the one that will be played.
