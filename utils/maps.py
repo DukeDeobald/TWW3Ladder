@@ -1,4 +1,3 @@
-
 MODE_MAP = {
     "land": 1, "l": 1,
     "conquest": 2, "c": 2,
