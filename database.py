@@ -337,15 +337,6 @@ class Database:
         """, (discord_id, discord_id, limit))
         return self.cursor.fetchall()
 
-    def is_lobby_occupied(self, lobby):
-        pass
-
-    def get_available_lobby(self):
-        pass
-
-    def get_match_lobby(self, player1, player2, GameModeID):
-        pass
-
     def get_queue_statistics(self):
         self.cursor.execute("""
             SELECT strftime('%Y-%m-%d %H:%M:%S', timestamp_queued) AS timestamp, 
@@ -472,12 +463,11 @@ class Database:
             if wins >= win_req:
                 if role_id not in awarded_roles_ids:
                     highest_role_to_award = (role_name, role_id)
-                    # Mark all lower-tier roles for removal
                     for j in range(i + 1, len(roles)):
                         lower_role_id = roles[j][2]
                         if lower_role_id in awarded_roles_ids:
                             roles_to_remove.add(lower_role_id)
-                    break  # Stop after finding the highest new role
+                    break
 
         if highest_role_to_award:
             return highest_role_to_award[0], highest_role_to_award[1], list(roles_to_remove)
