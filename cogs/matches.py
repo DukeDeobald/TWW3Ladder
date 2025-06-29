@@ -191,7 +191,7 @@ class Matches(commands.Cog):
                               "- Unit caps should be ON. Only use in-game rules.",
                             "conquest": "**⚔️ Conquest Mode Rules:**\n-"
                                         "Unit caps MUST be ON.\n"
-                                        "Tickets set to 650",
+                                        "Tickets set to 600",
                             "domination": "**🏆 Domination Mode Rules:**\n- "
                                           "Unit caps MUST be ON.\n"
                                           "Default funds\n"
