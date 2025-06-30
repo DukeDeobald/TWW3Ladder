@@ -4,7 +4,7 @@ import random
 from database import Database
 from logic import update_elo
 
-from utils.maps import MODE_MAP, REVERSE_MODE_MAP, domination_constant_maps, season0_domination_maps, conquest_maps, land_maps
+from utils.maps import MODE_MAP, REVERSE_MODE_MAP, domination_constant_maps, season0_domination_maps, conquest_maps, land_maps, factions
 
 class Matches(commands.Cog):
     def __init__(self, bot):
@@ -98,9 +98,12 @@ class Matches(commands.Cog):
                                 selected_maps.extend(random.sample(domination_constant_maps, 2))
                                 selected_maps.append(random.choice(season0_domination_maps))
                                 random.shuffle(selected_maps)
-                        elif mode_name == "conquest" or mode_name == "luckydice":
+                        elif mode_name == "conquest":
                             if len(conquest_maps) >= 3:
                                 selected_maps = random.sample(conquest_maps, 3)
+                        elif mode_name == "luckydice":
+                            if len(conquest_maps) >= 5:
+                                selected_maps = random.sample(conquest_maps, 5)
                         elif mode_name == "land":
                             if len(land_maps) >= 3:
                                 selected_maps = random.sample(land_maps, 3)
@@ -136,6 +139,25 @@ class Matches(commands.Cog):
                         > • **Player 2**: <@{player2}>
                         """)
 
+                        if mode_name == "luckydice":
+                            faction_names = list(factions.keys())
+                            random.shuffle(faction_names)
+
+                            player1_factions = faction_names[:8]
+                            player2_factions = faction_names[8:16]
+
+                            player1_text = '  '.join(factions[name] for name in player1_factions)
+                            player2_text = '  '.join(factions[name] for name in player2_factions)
+
+                            await thread.thread.send(f"""
+                        **<@{player1}>'s factions:**  
+                        > {player1_text}
+
+                        **<@{player2}>'s factions:**  
+                        > {player2_text}
+                        🔔 **Players should coordinate their picks/bans in this thread and send replays afterwards!**
+                        """)
+
                         if mode_name in ["land", "conquest"]:
                             await thread.thread.send("""
                             **⚔️ Pick/Ban System Rules**
@@ -159,7 +181,7 @@ class Matches(commands.Cog):
                             > • Opponent picks their faction  
                             > • Winner selects one of their 2 pre-picked factions
     
-                            🔔 **Players should coordinate their picks/bans in this thread.**
+                            🔔 **Players should coordinate their picks/bans in this thread and send replays afterwards!**
                             """)
 
                         elif mode_name == "domination":
@@ -174,6 +196,7 @@ class Matches(commands.Cog):
                             VP     o   o    o
                             BM     o   o    o
                             BR     o   o    o
+                            🔔 **Players should coordinate their picks/bans in this thread and send replays afterwards!**
                             """)
 
                         mode_rules = {
@@ -197,8 +220,7 @@ class Matches(commands.Cog):
                                           "Default funds\n"
                                           "Ultra units scale\n"
                                           "Tickets set to 1500",
-                            "luckydice": "**🎲 Lucky Dice Mode Rules:**\n- **ULTRA FUNDS** (17,000).\n- Each player can roll up to 5 times in total: meaning you can have maximum of 4 factions rolls, and it leaves you with 1 roll for a build. If a player rolls more than 5 times, they receive a technical loss in that battle. (Note: you can use unspent gold to give units chevrons. It is also possible to remove some units, but this money can still only be used for chevrons.).\n- The mode is Conquest, with 600 tickets.\n- Unit caps must be ON.\n"
-                        }
+                            "luckydice": "**🎲 Lucky Dice Mode Rules:** \n- **ULTRA FUNDS** (17,000).\n- Each player received a pool of 8 unique factions assigned by the bot.\n Then players pick factions from their pool for the whole series using 1-2/2-2/2-1 system.\nFor each game players have 5 build rolls to choose their army. (Note: unused gold can be spent on unit upgrades (chevrons). You may also delete some units, but any saved gold may still only be used for chevrons.) \n- The mode is **Conquest**, with **600** tickets.\n- **Unit caps** must be **ON**.\n"}
 
                         if mode_name in mode_rules:
                             await thread.thread.send(mode_rules[mode_name])

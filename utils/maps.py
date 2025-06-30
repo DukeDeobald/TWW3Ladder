@@ -69,3 +69,31 @@ land_maps = [
     "Pillar of Bone",
     "The Flats of Kislev"
 ]
+
+factions = {
+    "Beastmen": "<:f_bm:1389314789544689705>",
+    "Bretonnia": "<:f_brt:1389314791427932190>",
+    "Chaos Dwarfs": "<:f_cd:1389314792895811636>",
+    "Dark Elves": "<:f_de:1389314794145714219>",
+    "Daemons of Chaos": "<:f_doc:1389314795769172108>",
+    "Dwarfs": "<:f_dwf:1389314798872821892>",
+    "Empire": "<:f_emp:1389314800865251599>",
+    "Grand Cathay": "<:f_gc:1389314803104743465>",
+    "Greenskins": "<:f_gs:1389314804514033776>",
+    "High Elves": "<:f_he:1389314806011662426>",
+    "Khorne": "<:f_khr:1389314807815209001>",
+    "Lizardmen": "<:f_lm:1389314811510263930>",
+    "Nurgle": "<:f_ngl:1389314814920364042>",
+    "Norsca": "<:f_nsc:1389314976753123559>",
+    "Ogre Kingdoms": "<:f_ok:1389314820582543471>",
+    "Skaven": "<:f_skv:1389314825833812018>",
+    "Slaanesh": "<:f_sln:1389314827897536723>",
+    "Tomb Kings": "<:f_tk:1389314829889700022>",
+    "Tzeentch": "<:f_tzn:1389314939994243162>",
+    "Vampire Counts": "<:f_vcnts:1389314833626828893>",
+    "Vampire Coast": "<:f_vcst:1389314835891749037>",
+    "Wood Elves": "<:f_we:1389314954800136392>",
+    "Warriors of Chaos": "<:f_woc:1389314840157360298>",
+    "Kislev": "<:f_ksv:1389317595152384011>"
+}
+

@@ -186,6 +186,22 @@ class Admin(commands.Cog):
         except Exception as e:
             await ctx.send(f"Error adjusting ELO: {str(e)}")
 
+    @commands.command(aliases=["edit_tokens"])
+    @commands.has_role("Admin")
+    async def edittokens(self, ctx, member: discord.Member, amount: int):
+        try:
+            player_id = self.db.get_player_id(member.id)
+            if not player_id:
+                await ctx.send(f"Player {member.mention} not found in the database.")
+                return
+
+            self.db.update_player_balance(player_id, amount)
+            await ctx.send(f"✅ Successfully set {member.mention}'s tokens to {amount}.")
+
+        except Exception as e:
+            await ctx.send(f"Error editing tokens: {str(e)}")
+
+
 async def setup(bot):
     await bot.add_cog(Admin(bot))
 
