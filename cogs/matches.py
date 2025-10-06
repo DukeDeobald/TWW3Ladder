@@ -646,17 +646,22 @@ class Matches(commands.Cog):
             await ctx.send(f"Error fetching matches: {str(e)}")
 
     @commands.command(aliases=["rf"])
-    async def rfaction(self, ctx, n: int):
-        faction_list = list(factions.keys())
+    async def rfaction(self, ctx, n: int = 24):
+        faction_list = list(factions.values())
         if n > len(faction_list):
             await ctx.send(f"Cannot select {n} unique factions. There are only {len(faction_list)} factions available.")
             return
-        
+        if n == 0:
+            await ctx.send("Can't be 0")
+            return
+        elif n < 0:
+            await ctx.send("Can't be negative")
+            return
         selected_factions = random.sample(faction_list, n)
-        await ctx.send("Random Factions: " + ", ".join(selected_factions))
+        await ctx.send(" ".join(selected_factions) + ".")
 
     @commands.command()
-    async def rmaps(self, ctx, mode: str, n: int):
+    async def rmaps(self, ctx, mode: str, n: int = 5):
         mode = mode.lower()
         map_pools = {
             "d": domination_constant_maps + season0_domination_maps,
@@ -669,12 +674,28 @@ class Matches(commands.Cog):
             return
 
         map_pool = map_pools[mode]
-        if n > len(map_pool):
-            await ctx.send(f"Cannot select {n} unique maps for this mode. There are only {len(map_pool)} maps available.")
+        if isinstance(map_pool, dict):
+            map_names = list(map_pool.keys())
+        else:
+            map_names = list(map_pool)
+
+        if n > len(map_names):
+            await ctx.send(
+                f"Cannot select {n} unique maps for this mode. There are only {len(map_names)} maps available.")
             return
 
-        selected_maps = random.sample(map_pool, n)
-        await ctx.send(f"Random Maps for {mode}: " + ", ".join(selected_maps))
+        selected_maps = random.sample(map_names, n)
+
+        if isinstance(map_pool, dict):
+            maps_message = "\n\n**🗺️ Maps:**\n" + "\n".join(
+                f"> • {name} <#{map_pool[name]}>" for name in selected_maps
+            )
+        else:
+            maps_message = "\n\n**🗺️ Maps:**\n" + "\n".join(
+                f"> • {name}" for name in selected_maps
+            )
+
+        await ctx.send(maps_message)
 
     async def assign_reward_role(self, member, role_id):
         role = member.guild.get_role(role_id)
