@@ -217,6 +217,11 @@ class Leaderboard(commands.Cog):
                 try:
                     user = await self.bot.fetch_user(player_id)
                     display_name = user.display_name
+                    db_player_id = self.db.get_player_id(player_id)
+                    perks = self.db.get_player_perks(db_player_id)
+                    for perk_type, data in perks:
+                        if perk_type == 'highlight':
+                            display_name = f"**{display_name}** ✨"
                 except discord.NotFound:
                     display_name = f"Player {player_id}"
 

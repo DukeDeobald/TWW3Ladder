@@ -2,6 +2,7 @@ import discord
 from discord.ext import commands
 from database import Database
 from logic import update_elo
+import re
 
 from utils.maps import MODE_MAP
 
@@ -11,9 +12,11 @@ class Admin(commands.Cog):
         self.db = Database()
         self.mode_map = MODE_MAP
 
+    
+
     @commands.command(aliases=["revert"])
     @commands.has_role("Admin")
-    async def revert_result(self, ctx, match_id: int):
+    async def revert_result(self, ctx, match_id: int, silent: bool = False):
         try:
             self.db.cursor.execute("""
                 SELECT player1, player2, winner, GameModeID, 
@@ -42,18 +45,6 @@ class Admin(commands.Cog):
                 WHERE player_id = ? AND GameModeID = ?
             """, (elo_before_loser, player2 if winner == player1 else player1, GameModeID))
 
-            self.db.cursor.execute("DELETE FROM match_history WHERE id = ?", (match_id,))
-
-            self.db.cursor.execute("SELECT bettor_id, amount FROM bets WHERE match_id = ?", (match_id,))
-            bets = self.db.cursor.fetchall()
-
-            for bettor_id, amount in bets:
-                try:
-                    current_balance = self.db.get_player_balance(self.db.get_player_id(bettor_id))
-                    self.db.update_player_balance(self.db.get_player_id(bettor_id), current_balance + amount)
-                except Exception as e:
-                    print(f"Error refunding bet for {bettor_id}: {e}")
-
             self.db.cursor.execute("DELETE FROM bets WHERE match_id = ?", (match_id,))
             self.db.conn.commit()
 
@@ -73,9 +64,10 @@ class Admin(commands.Cog):
             player2_name = player2_user.name
             winner_name = player1_name if winner == player1 else player2_name
 
-            await ctx.send(
-                f"✅ Successfully reverted match #{match_id} ({player1_name} vs {player2_name}, winner: {winner_name})"
-            )
+            if not silent:
+                await ctx.send(
+                    f"✅ Successfully reverted match #{match_id} ({player1_name} vs {player2_name}, winner: {winner_name})"
+                )
             await self.bot.get_cog('Leaderboard').update_leaderboard(GameModeID)
 
         except (discord.HTTPException, discord.Forbidden) as e:
@@ -83,40 +75,64 @@ class Admin(commands.Cog):
         except Exception as e:
             await ctx.send(f"An unexpected error occurred while reverting the match: {e}")
 
-    @commands.command(aliases=["force_result"])
+    @commands.command(aliases=["edit_match"])
     @commands.has_role("Admin")
-    async def force_match_result(self, ctx, winner: discord.Member, loser: discord.Member, mode: str):
+    async def edit_match_result(self, ctx, match_id: int, new_winner: discord.Member):
         try:
-            GameModeID = self.mode_map.get(mode.lower())
-            if not GameModeID:
-                await ctx.send("Invalid mode. Valid modes: land, conquest, domination, luckydice")
+            # Get the match details from history
+            self.db.cursor.execute("""
+                SELECT player1, player2, GameModeID
+                FROM match_history
+                WHERE id = ?
+            """, (match_id,))
+            match = self.db.cursor.fetchone()
+
+            if not match:
+                await ctx.send(f"No match found with ID {match_id}")
                 return
 
-            winner_rating_before = self.db.get_player_rating(winner.id, GameModeID)
-            loser_rating_before = self.db.get_player_rating(loser.id, GameModeID)
+            player1_db_id, player2_db_id, GameModeID = match
+
+            player1_discord_id = self.db.get_discord_id(player1_db_id)
+            player2_discord_id = self.db.get_discord_id(player2_db_id)
+
+            await self.revert_result(ctx, match_id, silent=True)
+
+            new_loser = None
+            if new_winner.id == player1_discord_id:
+                new_loser_id = player2_discord_id
+            elif new_winner.id == player2_discord_id:
+                new_loser_id = player1_discord_id
+            else:
+                await ctx.send(f"{new_winner.mention} was not a participant in match #{match_id}.")
+                return
+            
+            new_loser = await self.bot.fetch_user(new_loser_id)
+
+            winner_rating_before = self.db.get_player_rating(new_winner.id, GameModeID)
+            loser_rating_before = self.db.get_player_rating(new_loser.id, GameModeID)
 
             new_winner_rating, new_loser_rating = update_elo(winner_rating_before, loser_rating_before)
 
             self.db.record_match_result(
-                winner.id,
-                loser.id,
+                new_winner.id,
+                new_loser.id,
                 GameModeID,
                 winner_rating_before,
                 new_winner_rating,
                 loser_rating_before,
-                new_loser_rating
+                new_loser_rating,
+                match_id=match_id
             )
 
             await ctx.send(
-                f"✅ Forced match result recorded: {winner.mention} wins against {loser.mention} in {mode} mode!\n"
-                f"Rating change:\n{winner.mention}: {new_winner_rating} (+{new_winner_rating - winner_rating_before})\n"
-                f"{loser.mention}: {new_loser_rating} ({new_loser_rating - loser_rating_before})"
+                f"✅ Match #{match_id} result edited: {new_winner.mention} is now the winner."
             )
 
             await self.bot.get_cog('Leaderboard').update_leaderboard(GameModeID)
 
         except Exception as e:
-            await ctx.send(f"Error forcing match result: {str(e)}")
+            await ctx.send(f"Error editing match result: {str(e)}")
 
     @commands.command(aliases=["list_matches"])
     @commands.has_role("Admin")
@@ -198,6 +214,21 @@ class Admin(commands.Cog):
 
         except Exception as e:
             await ctx.send(f"Error editing tokens: {str(e)}")
+
+    @commands.command(aliases=["checktokens"])
+    @commands.has_role("Admin")
+    async def check_tokens(self, ctx, member: discord.Member):
+        try:
+            player_id = self.db.get_player_id(member.id)
+            if not player_id:
+                await ctx.send(f"Player {member.mention} not found in the database.")
+                return
+
+            balance = self.db.get_player_balance(player_id)
+            await ctx.send(f"{member.mention} has {balance} tokens.")
+
+        except Exception as e:
+            await ctx.send(f"Error checking tokens: {str(e)}")
 
 
 async def setup(bot):

@@ -26,6 +26,7 @@ class Betting(commands.Cog):
             return
 
         bettor_id = ctx.author.id
+        self.db.add_player(bettor_id)
 
         bettor_player_id = self.db.get_player_id(bettor_id)
         if bettor_player_id is None:
@@ -77,12 +78,11 @@ class Betting(commands.Cog):
         user_id = ctx.author.id
         if user_id:
             self.db.cursor.execute("""
-                SELECT match_id, bet_side, amount, placed_at, resolved, 
-                       players.discord_id 
-                FROM bets 
-                INNER JOIN players ON bets.bet_side = players.discord_id
-                WHERE bettor_id = ?
-            """, (user_id,))
+                SELECT b.match_id, b.bet_side, b.amount, b.placed_at, b.resolved, p.discord_id 
+                FROM bets b
+                INNER JOIN players p ON b.bet_side = p.id
+                WHERE b.bettor_id = ?
+            """, (self.db.get_player_id(user_id),))
             bets = self.db.cursor.fetchall()
             if bets:
                 response = [":scroll: **Your Bet History**"]
@@ -91,13 +91,11 @@ class Betting(commands.Cog):
                     status = "Resolved" if resolved else "Pending"
                     bet_side_member = ctx.guild.get_member(bet_side_discord_id)
                     if not bet_side_member:
-                        bet_side_member = self.bot.get_user(bet_side_discord_id)
-                    if not bet_side_member:
                         try:
                             bet_side_member = await self.bot.fetch_user(bet_side_discord_id)
                         except Exception:
                             bet_side_member = None
-                    bet_side_name = bet_side_member.name if bet_side_member else "Unknown Player"
+                    bet_side_name = bet_side_member.name if bet_side_member else f"Unknown Player ({bet_side_discord_id})"
                     response.append(f"• Match {match_id}: Bet on {bet_side_name} for {amount} tokens ({status})")
                 await ctx.send("\n".join(response))
             else:

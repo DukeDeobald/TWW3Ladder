@@ -109,8 +109,80 @@ class Database:
                 user_id INTEGER NOT NULL,
                 user_name TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS shop_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                price INTEGER NOT NULL
+            );
+
+            INSERT OR IGNORE INTO shop_items (name, description, price) VALUES 
+                ('Leaderboard Highlight', 'Highlight your name on the leaderboard for 7 days.', 50),
+                ('Custom Taunt', 'Set a custom message that displays when you win a match.', 100);
+
+            CREATE TABLE IF NOT EXISTS player_perks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                player_id INTEGER,
+                perk_type TEXT NOT NULL,
+                data TEXT,
+                expires_at TEXT,
+                FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS luckydice_selections (
+                match_id INTEGER PRIMARY KEY,
+                player1_id INTEGER NOT NULL,
+                player2_id INTEGER NOT NULL,
+                player1_faction_pool TEXT,
+                player2_faction_pool TEXT,
+                player1_selected_factions TEXT,
+                player2_selected_factions TEXT,
+                player1_ready BOOLEAN DEFAULT FALSE,
+                player2_ready BOOLEAN DEFAULT FALSE,
+                FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
+            );
+
+            CREATE TABLE IF NOT EXISTS faction_stats (
+                faction_name TEXT PRIMARY KEY,
+                wins INTEGER DEFAULT 0,
+                losses INTEGER DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS player_faction_stats (
+                player_id INTEGER,
+                faction_name TEXT,
+                wins INTEGER DEFAULT 0,
+                losses INTEGER DEFAULT 0,
+                PRIMARY KEY (player_id, faction_name),
+                FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+            );
         """)
+            
+
+    def update_faction_stats(self, faction_name, won):
+        if won:
+            self.cursor.execute("INSERT INTO faction_stats (faction_name, wins) VALUES (?, 1) ON CONFLICT(faction_name) DO UPDATE SET wins = wins + 1", (faction_name,))
+        else:
+            self.cursor.execute("INSERT INTO faction_stats (faction_name, losses) VALUES (?, 1) ON CONFLICT(faction_name) DO UPDATE SET losses = losses + 1", (faction_name,))
         self.conn.commit()
+
+    def update_player_faction_stats(self, player_id, faction_name, won):
+        db_player_id = self.get_player_id(player_id)
+        if won:
+            self.cursor.execute("INSERT INTO player_faction_stats (player_id, faction_name, wins) VALUES (?, ?, 1) ON CONFLICT(player_id, faction_name) DO UPDATE SET wins = wins + 1", (db_player_id, faction_name))
+        else:
+            self.cursor.execute("INSERT INTO player_faction_stats (player_id, faction_name, losses) VALUES (?, ?, 1) ON CONFLICT(player_id, faction_name) DO UPDATE SET losses = losses + 1", (db_player_id, faction_name))
+        self.conn.commit()
+
+    def get_faction_stats(self):
+        self.cursor.execute("SELECT faction_name, wins, losses FROM faction_stats")
+        return self.cursor.fetchall()
+
+    def get_player_faction_stats(self, player_id):
+        db_player_id = self.get_player_id(player_id)
+        self.cursor.execute("SELECT faction_name, wins, losses FROM player_faction_stats WHERE player_id = ?", (db_player_id,))
+        return self.cursor.fetchall()
 
     def log_event(self, command, user_id, user_name):
         now = datetime.now().isoformat()
@@ -193,6 +265,10 @@ class Database:
         self.cursor.execute("DELETE FROM queue WHERE discord_id = ?", (discord_id,))
         self.conn.commit()
 
+    def remove_from_queue(self, discord_id, GameModeID):
+        self.cursor.execute("DELETE FROM queue WHERE discord_id = ? AND GameModeID = ?", (discord_id, GameModeID))
+        self.conn.commit()
+
     def mark_as_unqueued(self, discord_id, GameModeID):
         now = datetime.now().isoformat()
         self.cursor.execute("""
@@ -215,12 +291,14 @@ class Database:
             VALUES (?, ?, ?, ?, ?, ?)
         """, (player1, player2, GameModeID, thread_id, now, now))
         self.conn.commit()
+        match_id = self.cursor.lastrowid
 
         self.cursor.execute("SELECT discord_id FROM players WHERE discord_id = ?", (player1,))
         user = self.cursor.fetchone()
         if user:
             user_name = user[0]
             self.log_event("create_match", player1, user_name)
+        return match_id
 
     def remove_match(self, player1_id, player2_id):
         self.cursor.execute("""
@@ -237,7 +315,7 @@ class Database:
             self.log_event("remove_match", player1_id, user_name)
 
     def record_match_result(self, winner_id, loser_id, GameModeID, elo_before_winner, elo_after_winner,
-                            elo_before_loser, elo_after_loser):
+                            elo_before_loser, elo_after_loser, match_id=None):
         now = datetime.now().isoformat()
 
         self.cursor.execute("SELECT id FROM players WHERE discord_id = ?", (winner_id,))
@@ -246,13 +324,21 @@ class Database:
         self.cursor.execute("SELECT id FROM players WHERE discord_id = ?", (loser_id,))
         loser_player_id = self.cursor.fetchone()[0]
 
-        self.cursor.execute("""
-            INSERT INTO match_history (player1, player2, winner, GameModeID, 
-                                       elo_before_winner, elo_after_winner, 
-                                       elo_before_loser, elo_after_loser, datetime)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (winner_player_id, loser_player_id, winner_player_id, GameModeID, elo_before_winner, elo_after_winner,
-              elo_before_loser, elo_after_loser, now))
+        if match_id:
+            self.cursor.execute("""
+                UPDATE match_history
+                SET winner = ?, elo_before_winner = ?, elo_after_winner = ?,
+                    elo_before_loser = ?, elo_after_loser = ?
+                WHERE id = ?
+            """, (winner_player_id, elo_before_winner, elo_after_winner, elo_before_loser, elo_after_loser, match_id))
+        else:
+            self.cursor.execute("""
+                INSERT INTO match_history (player1, player2, winner, GameModeID, 
+                                           elo_before_winner, elo_after_winner, 
+                                           elo_before_loser, elo_after_loser, datetime)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (winner_player_id, loser_player_id, winner_player_id, GameModeID, elo_before_winner, elo_after_winner,
+                  elo_before_loser, elo_after_loser, now))
 
         self.cursor.execute("""
             UPDATE player_ratings 
@@ -311,7 +397,7 @@ class Database:
             SELECT p.discord_id, pr.elo, pr.matches, pr.wins 
             FROM player_ratings pr
             JOIN players p ON pr.player_id = p.id
-            WHERE pr.GameModeID = ?
+            WHERE pr.GameModeID = ? AND pr.matches > 0
             ORDER BY pr.elo DESC
             LIMIT ?
         """, (GameModeID, limit))
@@ -375,6 +461,11 @@ class Database:
 
     def get_player_id(self, discord_id):
         self.cursor.execute("SELECT id FROM players WHERE discord_id = ?", (discord_id,))
+        result = self.cursor.fetchone()
+        return result[0] if result else None
+
+    def get_discord_id(self, player_id):
+        self.cursor.execute("SELECT discord_id FROM players WHERE id = ?", (player_id,))
         result = self.cursor.fetchone()
         return result[0] if result else None
 
@@ -585,3 +676,49 @@ class Database:
             return player1_id
         else:
             return None
+
+    def get_player_perks(self, player_id):
+        now = datetime.now().isoformat()
+        self.cursor.execute("DELETE FROM player_perks WHERE expires_at IS NOT NULL AND expires_at < ?", (now,))
+        self.conn.commit()
+
+        self.cursor.execute("SELECT perk_type, data FROM player_perks WHERE player_id = ?", (player_id,))
+        return self.cursor.fetchall()
+
+    def create_luckydice_match(self, match_id, player1_id, player2_id, player1_pool, player2_pool):
+        self.cursor.execute("""
+            INSERT INTO luckydice_selections (match_id, player1_id, player2_id, player1_faction_pool, player2_faction_pool)
+            VALUES (?, ?, ?, ?, ?)
+        """, (match_id, player1_id, player2_id, ",".join(player1_pool), ",".join(player2_pool)))
+        self.conn.commit()
+
+    def get_luckydice_selections(self, match_id):
+        self.cursor.execute("SELECT * FROM luckydice_selections WHERE match_id = ?", (match_id,))
+        return self.cursor.fetchone()
+
+    def update_luckydice_selection(self, match_id, player_id, selected_factions):
+        selections = self.get_luckydice_selections(match_id)
+        if selections:
+            if selections[1] == player_id:
+                self.cursor.execute("UPDATE luckydice_selections SET player1_selected_factions = ?, player1_ready = TRUE WHERE match_id = ?", (",".join(selected_factions), match_id))
+            else:
+                self.cursor.execute("UPDATE luckydice_selections SET player2_selected_factions = ?, player2_ready = TRUE WHERE match_id = ?", (",".join(selected_factions), match_id))
+            self.conn.commit()
+
+    def get_token_leaderboard(self, limit=15):
+        self.cursor.execute("""
+            SELECT p.discord_id, p.tokens
+            FROM players p
+            ORDER BY p.tokens DESC
+            LIMIT ?
+        """, (limit,))
+        return self.cursor.fetchall()
+
+    def get_all_queued_players(self):
+        self.cursor.execute("""
+            SELECT q.discord_id, q.GameModeID, q.timestamp_queued, g.name 
+            FROM queue q
+            JOIN gamemode g ON q.GameModeID = g.id
+            WHERE q.is_matched = FALSE AND q.is_unqueued = FALSE
+        """)
+        return self.cursor.fetchall()

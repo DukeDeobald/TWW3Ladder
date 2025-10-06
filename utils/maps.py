@@ -40,7 +40,49 @@ season0_domination_maps = ["[TT] Arbiter Grounds",
     "[TT] Halls of Karag Dum"]
 
 
-conquest_maps = ['Isle of the Crimson Skull', 'Tower of Hoeth', 'Altdorf Outskirts', 'Sword of Torgald', 'Cliff of Beasts', 'Glacier Lake', 'Pillar Of Bone', 'Southern Chaos Wastes', 'Wyvern Lake', 'The Lost Crater', 'Valley of Thieves', 'Mortis Wastes', 'Ash Plains', 'The Bitter Dunes', 'Toothgrass Hill', 'River Amaxon', 'Shimmersward', 'Horned Hills', 'Blasted Lands', 'Peasants Pasture', 'Grey Mountain Stables', "Knights' Run", 'The Tourney Grounds', 'Choking Pits', 'The Flats of Kislev', 'Troll Run', 'Black Ark', 'Peak Pass', 'Forest of Shadows', 'The Dead Wood', 'Gor Gazan', 'Schwartzhafen', 'Alpine Ridge', 'Crossroads', 'Dok Karaz', 'Eschen', 'Heorot Ridge', 'Galbaraz', 'Blue Reach River', 'Praag']
+conquest_maps = {
+    "Isle of the Crimson Skull": 1389741011504205865,
+    "Tower of Hoeth": 1389748634538741790,
+    "Altdorf Outskirts": 1389700419630006334,
+    "Sword of Torgald": 1389745501854761071,
+    "Cliff of Beasts": 1389702824207712276,
+    "Glacier Lake": 1389739064026202192,
+    "Pillar Of Bone": 1389743112527806635,
+    "Southern Chaos Wastes": 1389745107376279567,
+    "Wyvern Lake": 1389749876761301022,
+    "The Lost Crater": 1389746947031564439,
+    "Valley of Thieves": 1389749431800168519,
+    "Mortis Wastes": 1389741853661859931,
+    "Ash Plains": 1389700801878036561,
+    "The Bitter Dunes": 1389745874216947872,
+    "Toothgrass Hill": 1389748172686884894,
+    "River Amaxon": 1389743992094199911,
+    "Shimmersward": 1389744755239424120,
+    "Horned Hills": 1389740581063884840,
+    "Blasted Lands": 1389701287578435745,
+    "Peasants Pasture": 1389742584871784511,
+    "Grey Mountain Stables": 1389740011372413228,
+    "Knights' Run": 1389741486836420700,
+    "The Tourney Grounds": 1389747640023126198,
+    "Choking Pits": 1389702507886022686,
+    "The Flats of Kislev": 1389746541203296256,
+    "Troll Run": 1389749065599811604,
+    "Black Ark": 1389701113930059817,
+    "Peak Pass": 1389742165521072138,
+    "Forest of Shadows": 1389734857810247781,
+    "The Dead Wood": 1389746242891943956,
+    "Gor Gazan": 1389739428791975987,
+    "Schwartzhafen": 1389744406621323384,
+    "Alpine Ridge": 1389699286010302574,
+    "Crossroads": 1389702998439100437,
+    "Dok Karaz": 1389703158208659597,
+    "Eschen": 1389703632542236682,
+    "Heorot Ridge": 1389740348791586876,
+    "Galbaraz": 1389738292152373348,
+    "Blue Reach River": 1389702373856907346,
+    "Praag": 1389743660878270527
+}
+
 
 land_maps = [
     "Bjornling's Gathering",
