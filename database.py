@@ -56,6 +56,7 @@ class Database:
                 player2 INTEGER, 
                 GameModeID INTEGER, 
                 thread_id INTEGER,  
+                message_id INTEGER,
                 created_at TEXT DEFAULT (datetime('now')),
                 updated_at TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (GameModeID) REFERENCES gamemode(id)
@@ -299,6 +300,23 @@ class Database:
             user_name = user[0]
             self.log_event("create_match", player1, user_name)
         return match_id
+
+    def update_match_message_id(self, match_id, message_id):
+        self.cursor.execute("""
+            UPDATE matches 
+            SET message_id = ?
+            WHERE id = ?
+        """, (message_id, match_id))
+        self.conn.commit()
+
+    def get_match_message_id(self, match_id):
+        self.cursor.execute("""
+            SELECT message_id 
+            FROM matches 
+            WHERE id = ?
+        """, (match_id,))
+        result = self.cursor.fetchone()
+        return result[0] if result else None
 
     def remove_match(self, player1_id, player2_id):
         self.cursor.execute("""

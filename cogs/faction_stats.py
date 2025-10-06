@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 from database import Database
+from utils.maps import factions
 
 class FactionStats(commands.Cog):
     def __init__(self, bot):
@@ -26,7 +27,7 @@ class FactionStats(commands.Cog):
         for faction_name, wins, losses in sorted_stats:
             total_games = wins + losses
             win_rate = (wins / total_games) * 100 if total_games > 0 else 0
-            message += f"**{faction_name}**: {win_rate:.2f}% ({wins}W/{losses}L)\n"
+            message += f"{factions[faction_name]} **{faction_name}** {factions[faction_name]}: {win_rate:.2f}% [ {wins}W / {losses}L ]\n"
 
         async for msg in channel.history(limit=100):
             if msg.author == self.bot.user:
@@ -58,7 +59,7 @@ class FactionStats(commands.Cog):
         for faction_name, wins, losses in sorted_stats:
             total_games = wins + losses
             win_rate = (wins / total_games) * 100 if total_games > 0 else 0
-            message += f"**{faction_name}**: {win_rate:.2f}% ({wins}W/{losses}L)\n"
+            message += f"{factions[faction_name]} **{faction_name}** {factions[faction_name]}: {win_rate:.2f}% [ {wins}W / {losses}L ]\n"
 
         await ctx.send(message)
 

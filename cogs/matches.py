@@ -94,6 +94,19 @@ class SubmitButton(discord.ui.Button):
             player1 = await self.bot.fetch_user(player1_id)
             player2 = await self.bot.fetch_user(player2_id)
 
+            message_id = self.view_ref.db.get_match_message_id(self.view_ref.match_id)
+            if message_id:
+                try:
+                    channel = self.view_ref.bot.get_channel(interaction.channel.id)
+                    message = await channel.fetch_message(message_id)
+                    if message.components:
+                        view = discord.ui.View.from_message(message)
+                        for item in view.children:
+                            item.disabled = True
+                        await message.edit(view=view)
+                except (discord.NotFound, discord.Forbidden):
+                    pass
+
             message_content = f"**Picks are finalized!**\n\n"
             message_content += f"{player1.display_name} ⚔️ {player2.display_name}\n"
 
@@ -328,7 +341,8 @@ class Matches(commands.Cog):
                             self.db.create_luckydice_match(match_id, player1, player2, player1_factions_pool, player2_factions_pool)
 
                             view = InitiateFactionSelectView(self.db, match_id, selected_maps, self.bot)
-                            await thread.thread.send(f"<@{player1}> and <@{player2}>, please select your factions.", view=view)
+                            message = await thread.thread.send(f"<@{player1}> and <@{player2}>, please select your factions.", view=view)
+                            self.db.update_match_message_id(match_id, message.id)
 
                         return 
 
