@@ -45,7 +45,7 @@ class FactionStats(commands.Cog):
     async def on_luckydice_match_finished(self):
         await self.update_faction_stats_message()
 
-    @commands.command()
+    @commands.command(aliases=["mfs"])
     async def myfactionstats(self, ctx):
         stats = self.db.get_player_faction_stats(ctx.author.id)
 

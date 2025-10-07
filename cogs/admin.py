@@ -6,6 +6,7 @@ import re
 
 from utils.maps import MODE_MAP
 
+
 class Admin(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
@@ -79,7 +80,6 @@ class Admin(commands.Cog):
     @commands.has_role("Admin")
     async def edit_match_result(self, ctx, match_id: int, new_winner: discord.Member):
         try:
-            # Get the match details from history
             self.db.cursor.execute("""
                 SELECT player1, player2, GameModeID
                 FROM match_history

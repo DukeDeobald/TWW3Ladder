@@ -24,8 +24,10 @@ class FactionSelectView(discord.ui.View):
 
     def get_message_content(self):
         content = "Please select your 3 factions for this match.\n"
-        for i, faction in enumerate(self.selected_factions):
-            content += f"\nMap {i+1} ({self.maps[i]}): {factions[faction]}"
+        for i, map_name in enumerate(self.maps):
+            content += f"\nMap {i+1} ({map_name}): "
+            if i < len(self.selected_factions):
+                content += factions[self.selected_factions[i]]
         return content
 
     async def on_timeout(self):
@@ -311,7 +313,7 @@ class Matches(commands.Cog):
                         > • **Player 2**: <@{player2}>
                         """)
 
-                        match_id = self.db.create_match(player1, player2, game_mode_id, thread.thread.id)
+                        match_id = self.db.create_match(player1, player2, game_mode_id, thread.thread.id, selected_maps)
 
                         message_link = self.bot.config.RULES_MESSAGE_LINKS.get(mode_name)
                         if message_link and "YOUR_SERVER_ID" not in message_link:
@@ -479,43 +481,63 @@ class Matches(commands.Cog):
                 loser_id = ctx.author.id
 
             selections = self.db.get_luckydice_selections(match_id)
+            if not selections or not selections[5] or not selections[6]:
+                await ctx.send("Faction selections are not complete for this match. Please make sure both players have selected their factions.")
+                return
+                
             player1_factions = selections[5].split(',')
             player2_factions = selections[6].split(',')
+            
+            maps = self.db.get_match_maps(match_id)
 
-            response = f"**Lucky Dice Match Results:**\n"
+            game_results = []
+            
+            winner_name = (await self.bot.fetch_user(winner_id)).display_name
+            loser_name = (await self.bot.fetch_user(loser_id)).display_name
+
             for i, score in enumerate(scores):
-                game_winner = winner_id if score == '1' else loser_id
-                game_loser = loser_id if score == '1' else winner_id
+                if score == '1':
+                    game_winner_id = ctx.author.id
+                    game_loser_id = opponent
+                else:
+                    game_winner_id = opponent
+                    game_loser_id = ctx.author.id
 
                 p1_faction = player1_factions[i]
                 p2_faction = player2_factions[i]
 
-                winner_faction = p1_faction if game_winner == selections[1] else p2_faction
-                loser_faction = p1_faction if game_loser == selections[1] else p2_faction
+                winner_faction = p1_faction if game_winner_id == selections[1] else p2_faction
+                loser_faction = p1_faction if game_loser_id == selections[1] else p2_faction
 
                 self.db.update_faction_stats(winner_faction, True)
                 self.db.update_faction_stats(loser_faction, False)
-                self.db.update_player_faction_stats(game_winner, winner_faction, True)
-                self.db.update_player_faction_stats(game_loser, loser_faction, False)
+                self.db.update_player_faction_stats(game_winner_id, winner_faction, True)
+                self.db.update_player_faction_stats(game_loser_id, loser_faction, False)
+                
+                game_winner_name = (await self.bot.fetch_user(game_winner_id)).display_name
+                game_loser_name = (await self.bot.fetch_user(game_loser_id)).display_name
 
-                winner_rating_before = self.db.get_player_rating(game_winner, GameModeID)
-                loser_rating_before = self.db.get_player_rating(game_loser, GameModeID)
+                game_results.append(f"{maps[i]}: ||@{game_winner_name} ({factions[winner_faction]}) defeats @{game_loser_name} ({factions[loser_faction]})||")
 
-                new_winner_rating, new_loser_rating = update_elo(winner_rating_before, loser_rating_before)
-                self.db.update_player_rating(game_winner, GameModeID, new_winner_rating)
-                self.db.update_player_rating(game_loser, GameModeID, new_loser_rating)
+            winner_rating_before = self.db.get_player_rating(winner_id, GameModeID)
+            loser_rating_before = self.db.get_player_rating(loser_id, GameModeID)
 
-                self.db.record_match_result(
-                    game_winner,
-                    game_loser,
-                    GameModeID,
-                    winner_rating_before,
-                    new_winner_rating,
-                    loser_rating_before,
-                    new_loser_rating
-                )
-                response += f"\n**Game {i+1}:** <@{game_winner}> ({factions[winner_faction]}) defeats <@{game_loser}> ({factions[loser_faction]})\n"
-                response += f"Rating change: <@{game_winner}> {new_winner_rating} (+{new_winner_rating - winner_rating_before}) | <@{game_loser}> {new_loser_rating} ({new_loser_rating - loser_rating_before})\n"
+            new_winner_rating, new_loser_rating = update_elo(winner_rating_before, loser_rating_before, K=16)
+
+            self.db.record_luckydice_match(
+                winner_id,
+                loser_id,
+                GameModeID,
+                winner_rating_before,
+                new_winner_rating,
+                loser_rating_before,
+                new_loser_rating
+            )
+
+            response = "**Lucky Dice Match Results:**\n\n"
+            response += "\n".join(game_results)
+            response += f"\n\nRating change: @{winner_name} **{new_winner_rating} **(+{new_winner_rating - winner_rating_before}) | @{loser_name} **{new_loser_rating} **({new_loser_rating - loser_rating_before})\n\n"
+            response += "**Please, both players attach replays to this thread!**"
 
             self.db.resolve_bets(match_id, winner_id)
             self.db.remove_match(winner_id, loser_id)

@@ -57,6 +57,7 @@ class Database:
                 GameModeID INTEGER, 
                 thread_id INTEGER,  
                 message_id INTEGER,
+                maps TEXT,
                 created_at TEXT DEFAULT (datetime('now')),
                 updated_at TEXT DEFAULT (datetime('now')),
                 FOREIGN KEY (GameModeID) REFERENCES gamemode(id)
@@ -285,12 +286,13 @@ class Database:
             user_name = user[0]
             self.log_event("mark_as_unqueued", discord_id, user_name)
 
-    def create_match(self, player1, player2, GameModeID, thread_id):
+    def create_match(self, player1, player2, GameModeID, thread_id, maps=None):
         now = datetime.now().isoformat()
+        maps_str = ",".join(maps) if maps else None
         self.cursor.execute("""
-            INSERT INTO matches (player1, player2, GameModeID, thread_id, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?)
-        """, (player1, player2, GameModeID, thread_id, now, now))
+            INSERT INTO matches (player1, player2, GameModeID, thread_id, maps, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (player1, player2, GameModeID, thread_id, maps_str, now, now))
         self.conn.commit()
         match_id = self.cursor.lastrowid
 
@@ -740,3 +742,47 @@ class Database:
             WHERE q.is_matched = FALSE AND q.is_unqueued = FALSE
         """)
         return self.cursor.fetchall()
+
+    def get_match_maps(self, match_id):
+        self.cursor.execute("SELECT maps FROM matches WHERE id = ?", (match_id,))
+        result = self.cursor.fetchone()
+        return result[0].split(',') if result and result[0] else []
+
+    def update_player_wins(self, player_id, GameModeID, number_of_wins):
+        db_player_id = self.get_player_id(player_id)
+        if db_player_id:
+            self.cursor.execute("""
+                UPDATE player_ratings 
+                SET wins = wins + ?
+                WHERE player_id = ? AND GameModeID = ?
+            """, (number_of_wins, db_player_id, GameModeID))
+            self.conn.commit()
+
+    def record_luckydice_match(self, winner_id, loser_id, GameModeID, elo_before_winner, elo_after_winner,
+                            elo_before_loser, elo_after_loser):
+        now = datetime.now().isoformat()
+
+        winner_player_id = self.get_player_id(winner_id)
+        loser_player_id = self.get_player_id(loser_id)
+
+        self.cursor.execute("""
+            INSERT INTO match_history (player1, player2, winner, GameModeID, 
+                                       elo_before_winner, elo_after_winner, 
+                                       elo_before_loser, elo_after_loser, datetime)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (winner_player_id, loser_player_id, winner_player_id, GameModeID, elo_before_winner, elo_after_winner,
+              elo_before_loser, elo_after_loser, now))
+
+        self.cursor.execute("""
+            UPDATE player_ratings 
+            SET elo = ?, matches = matches + 1, wins = wins + 1
+            WHERE player_id = ? AND GameModeID = ?
+        """, (elo_after_winner, winner_player_id, GameModeID))
+
+        self.cursor.execute("""
+            UPDATE player_ratings 
+            SET elo = ?, matches = matches + 1
+            WHERE player_id = ? AND GameModeID = ?
+        """, (elo_after_loser, loser_player_id, GameModeID))
+
+        self.conn.commit()
