@@ -29,7 +29,7 @@ class FactionSelectView(discord.ui.View):
         for i, map_name in enumerate(self.maps):
             thread_id = conquest_maps.get(map_name)
             map_display = f"<#{thread_id}>" if thread_id else map_name
-            content += f"\n({map_display}): "
+            content += f"\n{map_display}: "
             if i < len(self.selected_factions):
                 content += factions[self.selected_factions[i]]
         return content
@@ -293,9 +293,8 @@ class Matches(commands.Cog):
                         maps_message = ""
                         if selected_maps:
                             if mode_name in ["conquest", "luckydice"]:
-                                maps_message = "\n\n**🗺️ Maps for this match:**\n" + "\n".join(
-                                    f"> • {name} <#{thread_id}>" for name, thread_id in conquest_maps.items() if
-                                    name in selected_maps)
+                                maps_message = "\n\n**🗺️ Maps for this match:**\n " + "\n".join(
+                                    f"> • {name} <#{conquest_maps[name]}>" for name in selected_maps)
                             else:
                                 maps_message = "\n\n**🗺️ Maps for this match:**\n> • " + "\n> • ".join(selected_maps)
 
@@ -522,18 +521,46 @@ class Matches(commands.Cog):
             winner_rating_before = self.db.get_player_rating(winner_id, GameModeID)
             loser_rating_before = self.db.get_player_rating(loser_id, GameModeID)
             
-            new_winner_rating = winner_rating_before
-            new_loser_rating = loser_rating_before
+            current_overall_winner_elo = winner_rating_before
+            current_overall_loser_elo = loser_rating_before
 
             for i, score in enumerate(scores):
                 if score == '1':
-                    game_winner_id = ctx.author.id
-                    game_loser_id = opponent
-                    new_winner_rating, new_loser_rating = update_elo(new_winner_rating, new_loser_rating, K=16)
+                    game_winner_is_author = True
                 else:
-                    game_winner_id = opponent
-                    game_loser_id = ctx.author.id
-                    new_loser_rating, new_winner_rating = update_elo(new_loser_rating, new_winner_rating, K=16)
+                    game_winner_is_author = False
+
+                if game_winner_is_author:
+                    game_player1_id = ctx.author.id
+                    game_player2_id = opponent
+                else:
+                    game_player1_id = opponent
+                    game_player2_id = ctx.author.id
+
+                if game_player1_id == winner_id:
+                    elo_p1 = current_overall_winner_elo
+                else:
+                    elo_p1 = current_overall_loser_elo
+
+                if game_player2_id == winner_id:
+                    elo_p2 = current_overall_winner_elo
+                else:
+                    elo_p2 = current_overall_loser_elo
+
+                new_elo_p1, new_elo_p2 = update_elo(elo_p1, elo_p2, K=16)
+
+                if game_player1_id == winner_id:
+                    current_overall_winner_elo = new_elo_p1
+                else:
+                    current_overall_loser_elo = new_elo_p1
+
+                if game_player2_id == winner_id:
+                    current_overall_winner_elo = new_elo_p2
+                else:
+                    current_overall_loser_elo = new_elo_p2
+
+                game_winner_id = game_player1_id
+                game_loser_id = game_player2_id
 
                 p1_faction = player1_factions[i]
                 p2_faction = player2_factions[i]
@@ -551,6 +578,9 @@ class Matches(commands.Cog):
 
                 game_results.append(
                     f"{maps[i]}: ||@{game_winner_name} ({factions[winner_faction]}) defeats @{game_loser_name} ({factions[loser_faction]})||")
+
+            new_winner_rating = current_overall_winner_elo
+            new_loser_rating = current_overall_loser_elo
 
 
 

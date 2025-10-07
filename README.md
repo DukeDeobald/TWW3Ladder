@@ -2,7 +2,7 @@
 
 Aiming to enhance the experience of Total War: Warhammer III online scene players, I decided to develop this discord bot.
 
-As for current functionality, bot supports a number of commands. Every one of them needs a ! prefix to be called. Currently, bot is intended to work with 4 gamemodes: Land, Conquest, Domination and Lucky-Test. To simplify the use, each of them can be used in a short form when using commands (l, c, d, lt accordingly).
+As for current functionality, bot supports a number of commands. Every one of them needs a ! prefix to be called. Currently, bot is intended to work with 4 gamemodes: Land, Conquest, Domination and Lucky-Test. To simplify the use, each of them can be used in a short form when using commands (l, c, d, ld accordingly).
 
 Among these commands are:
 
@@ -30,6 +30,11 @@ Among these commands are:
 
 !m (!matches) to see the list of currently ongoing matches.
 
+
 ­
+
+**Patch 1 update** 
+<br>
+Starting with season 1, buttons for blind picks in luckydice mode have been introduced, alongside several small changes.
 
 Along with the change of ladder's competetive seasons I plan to introduce new features, so stay tuned and let me now if there is something in particular you'd like to see!
