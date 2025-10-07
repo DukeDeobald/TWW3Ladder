@@ -6,7 +6,9 @@ from logic import update_elo
 import re
 from datetime import datetime, timedelta
 
-from utils.maps import MODE_MAP, REVERSE_MODE_MAP, domination_constant_maps, season0_domination_maps, conquest_maps, land_maps, factions
+from utils.maps import MODE_MAP, REVERSE_MODE_MAP, domination_constant_maps, season0_domination_maps, conquest_maps, \
+    land_maps, factions
+
 
 class FactionSelectView(discord.ui.View):
     def __init__(self, db, match_id, player_id, faction_pool, maps, bot):
@@ -25,7 +27,9 @@ class FactionSelectView(discord.ui.View):
     def get_message_content(self):
         content = "Please select your 3 factions for this match.\n"
         for i, map_name in enumerate(self.maps):
-            content += f"\nMap {i+1} ({map_name}): "
+            thread_id = conquest_maps.get(map_name)
+            map_display = f"<#{thread_id}>" if thread_id else map_name
+            content += f"\n({map_display}): "
             if i < len(self.selected_factions):
                 content += factions[self.selected_factions[i]]
         return content
@@ -34,6 +38,7 @@ class FactionSelectView(discord.ui.View):
         for item in self.children:
             item.disabled = True
         await self.message.edit(content="Faction selection has timed out.", view=self)
+
 
 class FactionButton(discord.ui.Button):
     def __init__(self, faction_name, view):
@@ -69,6 +74,7 @@ class FactionButton(discord.ui.Button):
 
         await interaction.response.edit_message(content=self.view_ref.get_message_content(), view=self.view_ref)
 
+
 class SubmitButton(discord.ui.Button):
     def __init__(self, view, bot):
         super().__init__(label="Submit", style=discord.ButtonStyle.primary)
@@ -80,7 +86,8 @@ class SubmitButton(discord.ui.Button):
             await interaction.response.send_message("This is not for you.", ephemeral=True)
             return
 
-        self.view_ref.db.update_luckydice_selection(self.view_ref.match_id, self.view_ref.player_id, self.view_ref.selected_factions)
+        self.view_ref.db.update_luckydice_selection(self.view_ref.match_id, self.view_ref.player_id,
+                                                    self.view_ref.selected_factions)
         for item in self.view_ref.children:
             item.disabled = True
         await interaction.response.edit_message(content="Your selections have been submitted.", view=self.view_ref)
@@ -110,7 +117,7 @@ class SubmitButton(discord.ui.Button):
                     pass
 
             message_content = f"**Picks are finalized!**\n\n"
-            message_content += f"{player1.display_name} ⚔️ {player2.display_name}\n"
+            message_content += f"**{player1.display_name}** ⚔️ **{player2.display_name}**\n"
 
             for i in range(len(maps)):
                 p1_faction_name = player1_factions[i]
@@ -119,6 +126,7 @@ class SubmitButton(discord.ui.Button):
                 message_content += f'{factions[p1_faction_name]} {map_name} {factions[p2_faction_name]}\n'
 
             await interaction.channel.send(message_content)
+
 
 class InitiateFactionSelectView(discord.ui.View):
     def __init__(self, db, match_id, maps, bot):
@@ -142,12 +150,14 @@ class InitiateFactionSelectView(discord.ui.View):
             await interaction.response.send_message("This is not for you.", ephemeral=True)
             return
 
-        player_faction_pool = selections[3].split(',') if interaction.user.id == player1_id else selections[4].split(',')
+        player_faction_pool = selections[3].split(',') if interaction.user.id == player1_id else selections[4].split(
+            ',')
         view = FactionSelectView(self.db, self.match_id, interaction.user.id, player_faction_pool, self.maps, self.bot)
         await interaction.response.send_message(content=view.get_message_content(), view=view, ephemeral=True)
 
 
 from discord.ext import tasks, commands
+
 
 class Matches(commands.Cog):
     def __init__(self, bot):
@@ -166,11 +176,11 @@ class Matches(commands.Cog):
             all_queued_players = self.db.get_all_queued_players()
             for player_info in all_queued_players:
                 discord_id, game_mode_id, timestamp_queued, mode_name = player_info
-                
+
                 queued_time = datetime.fromisoformat(timestamp_queued)
                 if datetime.now() - queued_time > timedelta(hours=2):
                     self.db.remove_from_queue(discord_id, game_mode_id)
-                    
+
                     user = await self.bot.fetch_user(discord_id)
                     if user:
                         await user.send(f"You have been removed from the {mode_name} queue due to inactivity.")
@@ -200,7 +210,8 @@ class Matches(commands.Cog):
             if thread_id:
                 thread = self.bot.get_channel(thread_id)
                 if thread:
-                    await ctx.send(f'{ctx.author.name}, you are in a match ({mode_name}) against <@{opponent}> in {thread.jump_url}.')
+                    await ctx.send(
+                        f'{ctx.author.name}, you are in a match ({mode_name}) against <@{opponent}> in {thread.jump_url}.')
                     return
             await ctx.send(f'{ctx.author.name}, you are in a match ({mode_name}) against <@{opponent}>.')
         else:
@@ -214,7 +225,7 @@ class Matches(commands.Cog):
 
         mode_map = {"l": "land", "c": "conquest", "d": "domination", "ld": "luckydice"}
         requested_modes = [mode.strip() for mode in modes.split(',')]
-        
+
         if not requested_modes:
             await ctx.send("Please specify at least one mode to queue for.")
             return
@@ -244,9 +255,9 @@ class Matches(commands.Cog):
                 return
 
             self.db.add_to_queue(ctx.author.id, game_mode_id)
-            
+
             player_count = self.db.get_queue_players_count(game_mode_id)
-            
+
             if player_count >= 2:
                 queue_players = self.db.get_queue_players(game_mode_id)
                 if len(queue_players) >= 2:
@@ -271,10 +282,10 @@ class Matches(commands.Cog):
                                 random.shuffle(selected_maps)
                         elif mode_name == "conquest":
                             if len(conquest_maps) >= 3:
-                                selected_maps = random.sample(list(conquest_maps), 3)
+                                selected_maps = random.sample(list(conquest_maps.keys()), 3)
                         elif mode_name == "luckydice":
                             if len(conquest_maps) >= 3:
-                                selected_maps = random.sample(list(conquest_maps), 3)
+                                selected_maps = random.sample(list(conquest_maps.keys()), 3)
                         elif mode_name == "land":
                             if len(land_maps) >= 3:
                                 selected_maps = random.sample(land_maps, 3)
@@ -282,7 +293,9 @@ class Matches(commands.Cog):
                         maps_message = ""
                         if selected_maps:
                             if mode_name in ["conquest", "luckydice"]:
-                                maps_message = "\n\n**🗺️ Maps for this match:**\n" + "\n".join(f"> • {name} <#{thread_id}>" for name, thread_id in conquest_maps.items() if name in selected_maps)
+                                maps_message = "\n\n**🗺️ Maps for this match:**\n" + "\n".join(
+                                    f"> • {name} <#{thread_id}>" for name, thread_id in conquest_maps.items() if
+                                    name in selected_maps)
                             else:
                                 maps_message = "\n\n**🗺️ Maps for this match:**\n> • " + "\n> • ".join(selected_maps)
 
@@ -317,7 +330,8 @@ class Matches(commands.Cog):
 
                         message_link = self.bot.config.RULES_MESSAGE_LINKS.get(mode_name)
                         if message_link and "YOUR_SERVER_ID" not in message_link:
-                            match = re.match(r"https://(?:discord|discordapp).com/channels/\d+/(\d+)/(\d+)", message_link)
+                            match = re.match(r"https://(?:discord|discordapp).com/channels/\d+/(\d+)/(\d+)",
+                                             message_link)
                             if match:
                                 channel_id, message_id = map(int, match.groups())
                                 try:
@@ -329,10 +343,11 @@ class Matches(commands.Cog):
                             else:
                                 await thread.thread.send(f"Invalid rules message link format for {mode_name}.")
                         else:
-                            await thread.thread.send(f"No rules defined for {mode_name}. Please update the rules message link in `utils/config.py`.")
+                            await thread.thread.send(
+                                f"No rules defined for {mode_name}. Please update the rules message link in `utils/config.py`.")
 
                         await thread.thread.send(maps_message)
-                        
+
                         if mode_name == "luckydice":
                             faction_names = list(factions.keys())
                             random.shuffle(faction_names)
@@ -340,13 +355,15 @@ class Matches(commands.Cog):
                             player1_factions_pool = faction_names[:5]
                             player2_factions_pool = faction_names[5:10]
 
-                            self.db.create_luckydice_match(match_id, player1, player2, player1_factions_pool, player2_factions_pool)
+                            self.db.create_luckydice_match(match_id, player1, player2, player1_factions_pool,
+                                                           player2_factions_pool)
 
                             view = InitiateFactionSelectView(self.db, match_id, selected_maps, self.bot)
-                            message = await thread.thread.send(f"<@{player1}> and <@{player2}>, please select your factions.", view=view)
+                            message = await thread.thread.send(
+                                f"<@{player1}> and <@{player2}>, please select your factions.", view=view)
                             self.db.update_match_message_id(match_id, message.id)
 
-                        return 
+                        return
 
                     except (discord.HTTPException, discord.Forbidden) as e:
                         await ctx.send(f"Error creating match thread: {e}")
@@ -403,7 +420,7 @@ class Matches(commands.Cog):
                     left_modes.append(mode_name)
                 else:
                     not_in_queue_modes.append(mode_name)
-            
+
             response_parts = []
             if left_modes:
                 response_parts.append(f"left the queue for {', '.join(left_modes)}")
@@ -424,11 +441,13 @@ class Matches(commands.Cog):
 
             match_id = self.db.get_active_match(player_id)
             if match_id:
-                self.db.cursor.execute("SELECT bettor_id, amount FROM bets WHERE match_id = ? AND resolved = FALSE", (match_id,))
+                self.db.cursor.execute("SELECT bettor_id, amount FROM bets WHERE match_id = ? AND resolved = FALSE",
+                                       (match_id,))
                 unresolved_bets = self.db.cursor.fetchall()
 
                 for bettor_id, amount in unresolved_bets:
-                    self.db.update_player_balance(self.db.get_player_id(bettor_id), self.db.get_player_balance(self.db.get_player_id(bettor_id)) + amount)
+                    self.db.update_player_balance(self.db.get_player_id(bettor_id),
+                                                  self.db.get_player_balance(self.db.get_player_id(bettor_id)) + amount)
                 self.db.cursor.execute("UPDATE bets SET resolved = TRUE WHERE match_id = ?", (match_id,))
                 self.db.conn.commit()
 
@@ -441,7 +460,8 @@ class Matches(commands.Cog):
     @commands.command(aliases=["r", "R"])
     async def result(self, ctx, outcome: str, scores: str = None):
         if outcome.lower() not in ["win", "w", "loss", "l"]:
-            await ctx.send("Invalid result. Use `!r win` or `!r loss`. For Lucky Dice, use `!r <w/l> <scores>` (e.g., `!r w 101`).")
+            await ctx.send(
+                "Invalid result. Use `!r win` or `!r loss`. For Lucky Dice, use `!r <w/l> <scores>` (e.g., `!r w 101`).")
             return
 
         match_details = self.db.get_match_details(ctx.author.id)
@@ -469,7 +489,8 @@ class Matches(commands.Cog):
             wins = scores.count('1')
             losses = scores.count('0')
 
-            if (outcome.lower() in ["win", "w"] and wins <= losses) or (outcome.lower() in ["loss", "l"] and losses <= wins):
+            if (outcome.lower() in ["win", "w"] and wins <= losses) or (
+                    outcome.lower() in ["loss", "l"] and losses <= wins):
                 await ctx.send("The scores you provided do not match the win/loss outcome.")
                 return
 
@@ -482,26 +503,37 @@ class Matches(commands.Cog):
 
             selections = self.db.get_luckydice_selections(match_id)
             if not selections or not selections[5] or not selections[6]:
-                await ctx.send("Faction selections are not complete for this match. Please make sure both players have selected their factions.")
+                await ctx.send(
+                    "Faction selections are not complete for this match. Please make sure both players have selected their factions.")
                 return
-                
+
             player1_factions = selections[5].split(',')
             player2_factions = selections[6].split(',')
-            
+
             maps = self.db.get_match_maps(match_id)
 
+
+
             game_results = []
-            
+
             winner_name = (await self.bot.fetch_user(winner_id)).display_name
             loser_name = (await self.bot.fetch_user(loser_id)).display_name
+
+            winner_rating_before = self.db.get_player_rating(winner_id, GameModeID)
+            loser_rating_before = self.db.get_player_rating(loser_id, GameModeID)
+            
+            new_winner_rating = winner_rating_before
+            new_loser_rating = loser_rating_before
 
             for i, score in enumerate(scores):
                 if score == '1':
                     game_winner_id = ctx.author.id
                     game_loser_id = opponent
+                    new_winner_rating, new_loser_rating = update_elo(new_winner_rating, new_loser_rating, K=16)
                 else:
                     game_winner_id = opponent
                     game_loser_id = ctx.author.id
+                    new_loser_rating, new_winner_rating = update_elo(new_loser_rating, new_winner_rating, K=16)
 
                 p1_faction = player1_factions[i]
                 p2_faction = player2_factions[i]
@@ -513,16 +545,14 @@ class Matches(commands.Cog):
                 self.db.update_faction_stats(loser_faction, False)
                 self.db.update_player_faction_stats(game_winner_id, winner_faction, True)
                 self.db.update_player_faction_stats(game_loser_id, loser_faction, False)
-                
+
                 game_winner_name = (await self.bot.fetch_user(game_winner_id)).display_name
                 game_loser_name = (await self.bot.fetch_user(game_loser_id)).display_name
 
-                game_results.append(f"{maps[i]}: ||@{game_winner_name} ({factions[winner_faction]}) defeats @{game_loser_name} ({factions[loser_faction]})||")
+                game_results.append(
+                    f"{maps[i]}: ||@{game_winner_name} ({factions[winner_faction]}) defeats @{game_loser_name} ({factions[loser_faction]})||")
 
-            winner_rating_before = self.db.get_player_rating(winner_id, GameModeID)
-            loser_rating_before = self.db.get_player_rating(loser_id, GameModeID)
 
-            new_winner_rating, new_loser_rating = update_elo(winner_rating_before, loser_rating_before, K=16)
 
             self.db.record_luckydice_match(
                 winner_id,
@@ -536,7 +566,7 @@ class Matches(commands.Cog):
 
             response = "**Lucky Dice Match Results:**\n\n"
             response += "\n".join(game_results)
-            response += f"\n\nRating change: @{winner_name} **{new_winner_rating} **(+{new_winner_rating - winner_rating_before}) | @{loser_name} **{new_loser_rating} **({new_loser_rating - loser_rating_before})\n\n"
+            response += f"\n\nRating change: ||@{winner_name} **{new_winner_rating} **(+{new_winner_rating - winner_rating_before}) | @{loser_name} **{new_loser_rating} **({new_loser_rating - loser_rating_before})||\n\n"
             response += "**Please, both players attach replays to this thread!**"
 
             self.db.resolve_bets(match_id, winner_id)
@@ -550,7 +580,7 @@ class Matches(commands.Cog):
             for perk_type, data in perks:
                 if perk_type == 'taunt':
                     taunt = data
-            
+
             if taunt:
                 response += f"\n\n**{ctx.guild.get_member(winner_id).display_name} says:** {taunt}"
 
@@ -754,7 +784,7 @@ class Matches(commands.Cog):
                 if role and role in member.roles:
                     await member.remove_roles(role)
                     self.db.cursor.execute("DELETE FROM user_rewards WHERE user_id = ? AND role_id = ?",
-                                            (self.db.get_player_id(user_id), role_to_remove_id))
+                                           (self.db.get_player_id(user_id), role_to_remove_id))
                     self.db.conn.commit()
 
         if role_id:
@@ -764,6 +794,7 @@ class Matches(commands.Cog):
                 await ctx.send(f"{member.mention} has been promoted to **{reward_name}**!")
             else:
                 await ctx.send(f"Could not assign the role '{reward_name}' to {member.mention}.")
+
 
 async def setup(bot):
     await bot.add_cog(Matches(bot))

@@ -286,13 +286,12 @@ class Database:
             user_name = user[0]
             self.log_event("mark_as_unqueued", discord_id, user_name)
 
-    def create_match(self, player1, player2, GameModeID, thread_id, maps=None):
+    def create_match(self, player1, player2, GameModeID, thread_id, maps):
         now = datetime.now().isoformat()
-        maps_str = ",".join(maps) if maps else None
         self.cursor.execute("""
             INSERT INTO matches (player1, player2, GameModeID, thread_id, maps, created_at, updated_at)
             VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (player1, player2, GameModeID, thread_id, maps_str, now, now))
+        """, (player1, player2, GameModeID, thread_id, ",".join(maps), now, now))
         self.conn.commit()
         match_id = self.cursor.lastrowid
 
@@ -759,7 +758,7 @@ class Database:
             self.conn.commit()
 
     def record_luckydice_match(self, winner_id, loser_id, GameModeID, elo_before_winner, elo_after_winner,
-                            elo_before_loser, elo_after_loser):
+                               elo_before_loser, elo_after_loser):
         now = datetime.now().isoformat()
 
         winner_player_id = self.get_player_id(winner_id)
