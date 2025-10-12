@@ -21,19 +21,33 @@ class FactionStats(commands.Cog):
             await channel.send("No faction stats available yet.")
             return
 
-        message = "**Global Faction Win Rates (Lucky Dice):**\n\n"
-        sorted_stats = sorted(stats, key=lambda x: (x[1] / (x[1] + x[2])) if (x[1] + x[2]) > 0 else 0, reverse=True)
+        message_header = "**Global Faction Win Rates (Lucky Dice):**\n\n"
+        sorted_stats = sorted(
+            stats,
+            key=lambda x: (x[1] / (x[1] + x[2])) if (x[1] + x[2]) > 0 else 0,
+            reverse=True
+        )
 
+        lines = []
         for faction_name, wins, losses in sorted_stats:
             total_games = wins + losses
             win_rate = (wins / total_games) * 100 if total_games > 0 else 0
-            message += f"{factions[faction_name]} **{faction_name}** {factions[faction_name]}: {win_rate:.2f}% [ {wins}W / {losses}L ]\n"
+            line = f"{factions[faction_name]} **{faction_name}** {factions[faction_name]}: {win_rate:.2f}% [ {wins}W / {losses}L ]"
+            lines.append(line)
 
         async for msg in channel.history(limit=100):
             if msg.author == self.bot.user:
                 await msg.delete()
 
-        await channel.send(message)
+        current_message = message_header
+        for line in lines:
+            if len(current_message) + len(line) + 1 > 2000:
+                await channel.send(current_message)
+                current_message = ""
+            current_message += line + "\n"
+
+        if current_message.strip():
+            await channel.send(current_message)
 
     @commands.command()
     @commands.has_permissions(administrator=True)
