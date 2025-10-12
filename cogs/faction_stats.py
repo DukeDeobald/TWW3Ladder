@@ -35,11 +35,12 @@ class FactionStats(commands.Cog):
 
         await channel.send(message)
 
-    @commands.command()
-    @commands.has_permissions(administrator=True)
     async def factionstats(self, ctx):
-        await self.update_faction_stats_message()
-        await ctx.send(f"Faction stats updated in <#{self.channel_id}>")
+        try:
+            await self.update_faction_stats_message()
+            await ctx.send(f"Faction stats updated in <#{self.channel_id}>")
+        except Exception as e:
+            await ctx.send(f"⚠️ Error: `{e}`")
 
     @commands.Cog.listener()
     async def on_luckydice_match_finished(self):
