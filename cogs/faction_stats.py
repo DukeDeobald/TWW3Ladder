@@ -35,6 +35,8 @@ class FactionStats(commands.Cog):
 
         await channel.send(message)
 
+    @commands.command()
+    @commands.has_permissions(administrator=True)
     async def factionstats(self, ctx):
         try:
             await self.update_faction_stats_message()
