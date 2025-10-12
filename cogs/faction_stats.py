@@ -70,15 +70,31 @@ class FactionStats(commands.Cog):
             await ctx.send("You have no faction stats available yet.")
             return
 
-        message = f"**{ctx.author.display_name}'s Faction Win Rates (Lucky Dice):**\n\n"
-        sorted_stats = sorted(stats, key=lambda x: (x[1] / (x[1] + x[2])) if (x[1] + x[2]) > 0 else 0, reverse=True)
+        message_header = f"**{ctx.author.display_name}'s Faction Win Rates (Lucky Dice):**\n\n"
 
+        sorted_stats = sorted(
+            stats,
+            key=lambda x: (x[1] / (x[1] + x[2])) if (x[1] + x[2]) > 0 else 0,
+            reverse=True
+        )
+
+        lines = []
         for faction_name, wins, losses in sorted_stats:
             total_games = wins + losses
             win_rate = (wins / total_games) * 100 if total_games > 0 else 0
-            message += f"{factions[faction_name]} **{faction_name}** {factions[faction_name]}: {win_rate:.2f}% [ {wins}W / {losses}L ]\n"
+            line = f"{factions[faction_name]} **{faction_name}** {factions[faction_name]}: {win_rate:.2f}% [ {wins}W / {losses}L ]"
+            lines.append(line)
 
-        await ctx.send(message)
+        current_message = message_header
+        for line in lines:
+            if len(current_message) + len(line) + 1 > 2000:
+                await ctx.send(current_message)
+                current_message = ""
+            current_message += line + "\n"
+
+        if current_message.strip():
+            await ctx.send(current_message)
+
 
 async def setup(bot):
     await bot.add_cog(FactionStats(bot))
