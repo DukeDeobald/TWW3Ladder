@@ -202,7 +202,7 @@ class Admin(commands.Cog):
 
     @commands.command(aliases=["edit_tokens"])
     @commands.has_role("Admin")
-    async def edittokens(self, ctx, member: discord.Member, amount: int):
+    async def edittokens(self, ctx, amount: int, member: discord.Member):
         try:
             player_id = self.db.get_player_id(member.id)
             if not player_id:

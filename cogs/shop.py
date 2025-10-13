@@ -14,7 +14,7 @@ class Shop(commands.Cog):
         await ctx.send("Welcome to the shop! Select a perk to purchase.", view=view)
 
     @commands.command(name="give", aliases=["transfer"], description="Give tokens to another player.")
-    async def give(self, ctx, recipient: discord.Member, amount: int):
+    async def give(self, ctx, amount: int, recipient: discord.Member):
         sender = ctx.author
 
         if recipient.bot:
